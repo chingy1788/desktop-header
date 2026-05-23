@@ -1,0 +1,23 @@
+# .gitignore for Windows Virtual Desktop Header Overlay
+
+# Build folders
+**/bin/
+**/obj/
+
+# Visual Studio / Rider IDE folders
+.vs/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Reference repository cloned for extraction
+VirtualDesktop/
+
+# Diagnostic log files
+*.log
+debug.log
+
+# User-specific CLI settings or local system items
+.antigravitycli/
