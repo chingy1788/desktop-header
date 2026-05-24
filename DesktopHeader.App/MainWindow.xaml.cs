@@ -78,10 +78,36 @@ namespace DesktopHeader.App
 
         private void Timer_Tick(object? sender, EventArgs e)
         {
-            // Self-healing retry for window pinning if it failed during initial load
-            if (!_isPinned && _pinRetryCount < 10)
+            // Enforce Topmost to prevent the AppBar from being covered by other windows
+            try
             {
-                TryPinWindow();
+                if (!this.Topmost)
+                {
+                    this.Topmost = true;
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning($"Failed to enforce Topmost z-order: {ex.Message}");
+            }
+
+            // Self-healing retry/enforcement for window pinning across all virtual desktops
+            if (_windowHandle != IntPtr.Zero)
+            {
+                try
+                {
+                    bool isCurrentlyPinned = Desktop.IsWindowPinned(_windowHandle);
+                    if (!isCurrentlyPinned)
+                    {
+                        Logger.LogInfo("Window is not pinned to all virtual desktops. Re-applying pin...");
+                        Desktop.PinWindow(_windowHandle);
+                        _isPinned = true;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogWarning($"Failed to verify or pin window to all desktops: {ex.Message}");
+                }
             }
 
             UpdateDesktopsList();
