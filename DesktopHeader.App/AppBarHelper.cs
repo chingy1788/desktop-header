@@ -179,9 +179,8 @@ namespace DesktopHeader.App
                     try
                     {
                         window.Top = abd.rc.top;
-                        // Center horizontally across the screen
-                        double screenWidthDip = SystemParameters.PrimaryScreenWidth;
-                        window.Left = (screenWidthDip - window.ActualWidth) / 2;
+                        // Left-align to the screen (with a sleek 16px safe margin)
+                        window.Left = 16;
                     }
                     catch (Exception dispEx)
                     {
