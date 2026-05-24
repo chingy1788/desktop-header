@@ -30,11 +30,12 @@ Built with C# .NET 9.0 and Windows Presentation Foundation (WPF) for hardware-ac
 ### Project Structure
 - **DesktopHeader.App**: Main WPF GUI application.
   - `Models/DesktopItem.cs`: Core data model representing individual desktop properties and binding updates via `INotifyPropertyChanged`.
-  - `Interop/VirtualDesktopWrapper.cs`: Undocumented COM API definitions specifically tailored to Windows 11 (24H2/25H2/Build 26200+), featuring a customized `.NET Core` marshaller for the `IApplicationView` shell interface.
-  - `AppBarHelper.cs`: Helper class handling safe Shell AppBar registrations, workspace reservations, native WndProc hooks (`ABN_POSCHANGED`), and horizonal centering calculations.
-  - `MainWindow.xaml`: XAML UI definition specifying the glassmorphic style tokens, capsule gradient hover effects, layout, and active state triggers.
-  - `MainWindow.xaml.cs`: Visual code-behind handling load centering, manual dragging, optimistic switching, and self-healing background retry pinning.
+  - `Interop/VirtualDesktopWrapper.cs`: Undocumented COM API definitions specifically tailored to Windows 11 (24H2/25H2/Build 26200+), featuring a customized `.NET Core` marshaller for the `IApplicationView` shell interface and exposing the virtual desktop Guid `Id`.
+  - `AppBarHelper.cs`: Helper class handling safe Shell AppBar registrations, workspace reservations, native WndProc hooks (`ABN_POSCHANGED`), and full-width window margins calculations.
+  - `MainWindow.xaml`: XAML UI definition specifying the glassmorphic style tokens, flat capsule highlights, header layout, and the right-aligned expandable Notes panel.
+  - `MainWindow.xaml.cs`: Visual code-behind handling load centering, manual dragging, optimistic switching, self-healing background retry pinning, and real-time notes filesystem caching.
   - `Logger.cs`: Thread-safe, file-based logger writing to `debug.log`.
+  - `notes/`: Sub-folder in the application base directory storing virtual desktop notes as `note_{guid}.txt`.
 - **DesktopHeader.Tests**: xUnit automated testing project using FlaUI.Core and FlaUI.UIA3 to perform automated UI inspections and unit validations.
 
 ---
