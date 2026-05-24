@@ -379,6 +379,19 @@ namespace DesktopHeader.App
                 Desktop currentActive = Desktop.Current;
                 int currentActiveIndex = Desktop.FromDesktop(currentActive);
 
+                // Handle notes load/save dynamically on active virtual desktop switches
+                if (_lastActiveIndex != currentActiveIndex)
+                {
+                    if (_lastActiveIndex != -1)
+                    {
+                        Logger.LogInfo($"Active desktop switch detected from index {_lastActiveIndex} to {currentActiveIndex}. Auto-saving notes for previous desktop...");
+                        SaveCurrentDesktopNote();
+                    }
+
+                    Logger.LogInfo($"Loading notes for active desktop: {currentActive.Id}");
+                    LoadNoteForDesktop(currentActive.Id);
+                }
+
                 // If desktop count has changed, rebuild the list to keep in sync
                 if (Desktops.Count != count)
                 {
@@ -394,12 +407,6 @@ namespace DesktopHeader.App
                             IsActive = (i == currentActiveIndex)
                         });
                         Logger.LogInfo($"Discovered Desktop [{i}]: '{name}' (Active: {i == currentActiveIndex})");
-                    }
-
-                    // Load note for initial startup or count change
-                    if (_lastActiveIndex == -1 || _lastActiveIndex != currentActiveIndex)
-                    {
-                        LoadNoteForDesktop(currentActive.Id);
                     }
 
                     _lastActiveIndex = currentActiveIndex;
@@ -436,12 +443,7 @@ namespace DesktopHeader.App
 
                     if (activeIndexChanged && _lastActiveIndex != currentActiveIndex)
                     {
-                        Logger.LogInfo($"Active virtual desktop switched to index {currentActiveIndex} ('{Desktops[currentActiveIndex].Name}').");
-                        
-                        // Save previous note, then load new note
-                        SaveCurrentDesktopNote();
-                        LoadNoteForDesktop(currentActive.Id);
-
+                        Logger.LogInfo($"Syncing active index to: {currentActiveIndex}");
                         _lastActiveIndex = currentActiveIndex;
                     }
                 }
