@@ -1,4 +1,4 @@
-﻿// Author: Markus Scholtes, 2025
+// Author: Markus Scholtes, 2025
 // Version 1.21, 2025-08-11
 // Version for Windows 11 24H2 Insider
 // Compile with:
@@ -325,6 +325,8 @@ namespace VirtualDesktop
 
 		private IVirtualDesktop ivd;
 		private Desktop(IVirtualDesktop desktop) { this.ivd = desktop; }
+
+		public Guid Id => ivd.GetId();
 
 		public override int GetHashCode()
 		{ // get hash

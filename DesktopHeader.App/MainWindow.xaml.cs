@@ -17,8 +17,14 @@ using MessageBox = System.Windows.MessageBox;
 
 namespace DesktopHeader.App
 {
-    public partial class MainWindow : Window
+    public partial class MainWindow : Window, System.ComponentModel.INotifyPropertyChanged
     {
+        public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
+        
+        protected void OnPropertyChanged(string propertyName)
+        {
+            PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(propertyName));
+        }
         public ObservableCollection<DesktopItem> Desktops { get; } = new();
         private readonly DispatcherTimer _timer;
         private int _lastActiveIndex = -1;
@@ -92,11 +98,10 @@ namespace DesktopHeader.App
 
         private void Window_ContentRendered(object? sender, EventArgs e)
         {
-            // ContentRendered fires after the first render pass — ActualHeight is now accurate.
-            // Convert device-independent height to physical pixels using DPI scale.
             var dpiScale = VisualTreeHelper.GetDpi(this);
-            int heightPixels = (int)Math.Ceiling(this.ActualHeight * dpiScale.DpiScaleY);
-            Logger.LogInfo($"ContentRendered: window height = {this.ActualHeight} DIPs -> {heightPixels}px physical (DPI Y scale: {dpiScale.DpiScaleY})");
+            int barHeight = 46; // The AppBar layout reservation is fixed to 46 DIPs (Slim height)
+            int heightPixels = (int)Math.Ceiling(barHeight * dpiScale.DpiScaleY);
+            Logger.LogInfo($"ContentRendered: AppBar reservation height = {barHeight} DIPs -> {heightPixels}px physical (DPI Y scale: {dpiScale.DpiScaleY})");
 
             // Register as Windows AppBar — reserves exact header height so all windows dock below
             try
@@ -390,6 +395,13 @@ namespace DesktopHeader.App
                         });
                         Logger.LogInfo($"Discovered Desktop [{i}]: '{name}' (Active: {i == currentActiveIndex})");
                     }
+
+                    // Load note for initial startup or count change
+                    if (_lastActiveIndex == -1 || _lastActiveIndex != currentActiveIndex)
+                    {
+                        LoadNoteForDesktop(currentActive.Id);
+                    }
+
                     _lastActiveIndex = currentActiveIndex;
                     SaveDesktopsBackup();
                 }
@@ -425,6 +437,11 @@ namespace DesktopHeader.App
                     if (activeIndexChanged && _lastActiveIndex != currentActiveIndex)
                     {
                         Logger.LogInfo($"Active virtual desktop switched to index {currentActiveIndex} ('{Desktops[currentActiveIndex].Name}').");
+                        
+                        // Save previous note, then load new note
+                        SaveCurrentDesktopNote();
+                        LoadNoteForDesktop(currentActive.Id);
+
                         _lastActiveIndex = currentActiveIndex;
                     }
                 }
@@ -565,5 +582,180 @@ namespace DesktopHeader.App
                 }
             }
         }
+
+        #region Sticky Notes System Features
+
+        private string _currentNoteText = "";
+        public string CurrentNoteText
+        {
+            get => _currentNoteText;
+            set
+            {
+                if (_currentNoteText != value)
+                {
+                    _currentNoteText = value;
+                    OnPropertyChanged(nameof(CurrentNoteText));
+                    UpdateNotePreview(value);
+                }
+            }
+        }
+
+        private string _currentNotePreview = "Click to add notes...";
+        public string CurrentNotePreview
+        {
+            get => _currentNotePreview;
+            set
+            {
+                if (_currentNotePreview != value)
+                {
+                    _currentNotePreview = value;
+                    OnPropertyChanged(nameof(CurrentNotePreview));
+                }
+            }
+        }
+
+        private Guid _currentDesktopGuid = Guid.Empty;
+
+        private void UpdateNotePreview(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                CurrentNotePreview = "Click to add notes...";
+            }
+            else
+            {
+                // Get the first line
+                int lineBreakIndex = text.IndexOf('\n');
+                string firstLine = lineBreakIndex >= 0 ? text.Substring(0, lineBreakIndex).Trim() : text.Trim();
+                
+                if (string.IsNullOrWhiteSpace(firstLine))
+                {
+                    CurrentNotePreview = "Click to add notes...";
+                }
+                else
+                {
+                    CurrentNotePreview = firstLine;
+                }
+            }
+        }
+
+        private string GetNotesDirectory()
+        {
+            string dir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "notes");
+            if (!Directory.Exists(dir))
+            {
+                Directory.CreateDirectory(dir);
+            }
+            return dir;
+        }
+
+        private string GetNoteFilePath(Guid guid)
+        {
+            return Path.Combine(GetNotesDirectory(), $"note_{guid:N}.txt");
+        }
+
+        private void LoadNoteForDesktop(Guid guid)
+        {
+            if (guid == Guid.Empty) return;
+            
+            try
+            {
+                _currentDesktopGuid = guid;
+                string filePath = GetNoteFilePath(guid);
+                if (File.Exists(filePath))
+                {
+                    string content = File.ReadAllText(filePath);
+                    _currentNoteText = content; // Set backing field directly to avoid triggering save during load
+                    OnPropertyChanged(nameof(CurrentNoteText));
+                    UpdateNotePreview(content);
+                }
+                else
+                {
+                    _currentNoteText = "";
+                    OnPropertyChanged(nameof(CurrentNoteText));
+                    CurrentNotePreview = "Click to add notes...";
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError($"Failed to load note for desktop GUID: {guid}", ex);
+            }
+        }
+
+        private void SaveCurrentDesktopNote()
+        {
+            Guid guid = _currentDesktopGuid;
+            if (guid == Guid.Empty) return;
+
+            try
+            {
+                string filePath = GetNoteFilePath(guid);
+                string text = CurrentNoteText;
+                
+                if (string.IsNullOrWhiteSpace(text))
+                {
+                    if (File.Exists(filePath))
+                    {
+                        File.Delete(filePath);
+                        Logger.LogInfo($"Deleted empty note file for desktop: {guid}");
+                    }
+                }
+                else
+                {
+                    File.WriteAllText(filePath, text);
+                    Logger.LogInfo($"Successfully saved note for desktop: {guid}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError($"Failed to save note for desktop GUID: {guid}", ex);
+            }
+        }
+
+        private void NotesHeader_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            if (EditorRow.Height.Value == 0)
+            {
+                ExpandNotes();
+            }
+            else
+            {
+                CollapseNotes();
+            }
+        }
+
+        private void DoneButton_Click(object sender, RoutedEventArgs e)
+        {
+            CollapseNotes();
+        }
+
+        private void NotesTextBox_LostFocus(object sender, RoutedEventArgs e)
+        {
+            // Auto-save on focus loss
+            SaveCurrentDesktopNote();
+        }
+
+        private void ExpandNotes()
+        {
+            EditorRow.Height = new GridLength(234); // Expand row 1 height to fit TextBox + Done Button
+            ToggleIndicator.Text = "▴";
+            
+            // Focus the text box
+            NotesTextBox.Focus();
+            NotesTextBox.SelectionStart = NotesTextBox.Text?.Length ?? 0;
+            Logger.LogInfo("Expanded Notes panel.");
+        }
+
+        private void CollapseNotes()
+        {
+            EditorRow.Height = new GridLength(0); // Collapse row 1
+            ToggleIndicator.Text = "▾";
+            
+            // Auto-save on collapse
+            SaveCurrentDesktopNote();
+            Logger.LogInfo("Collapsed Notes panel.");
+        }
+
+        #endregion
     }
 }

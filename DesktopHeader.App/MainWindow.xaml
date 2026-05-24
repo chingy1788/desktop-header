@@ -5,8 +5,8 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
         Title="Virtual Desktop Header" 
-        Height="46" 
-        Width="650"
+        Height="350" 
+        Width="1920"
         WindowStyle="None" 
         AllowsTransparency="True" 
         Background="Transparent" 
@@ -54,60 +54,150 @@
         </Style>
     </Window.Resources>
 
-    <!-- Low-profile Docked Header Bar -->
-    <Border x:Name="MainContainer"
-            Margin="0"
-            Background="#D90C0C0E" 
-            BorderBrush="#1AFFFFFF" 
-            BorderThickness="1,0,1,1" 
-            CornerRadius="0,0,8,8"
-            HorizontalAlignment="Left"
-            VerticalAlignment="Stretch">
-        <Border.Effect>
-            <DropShadowEffect BlurRadius="8" ShadowDepth="1" Opacity="0.25" Color="#000000" />
-        </Border.Effect>
-        
-        <Grid Margin="4,2,4,2">
+    <Grid x:Name="LayoutRoot" Background="Transparent">
+        <!-- Low-profile Docked Header Bar (Left-aligned) -->
+        <Border x:Name="MainContainer"
+                Margin="0"
+                Height="46"
+                Background="#D90C0C0E" 
+                BorderBrush="#1AFFFFFF" 
+                BorderThickness="1,0,1,1" 
+                CornerRadius="0,0,8,8"
+                HorizontalAlignment="Left"
+                VerticalAlignment="Top">
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="8" ShadowDepth="1" Opacity="0.25" Color="#000000" />
+            </Border.Effect>
+            
+            <Grid Margin="4,2,4,2">
+                <!-- List of Desktops -->
+                <ItemsControl x:Name="DesktopsList" ItemsSource="{Binding Desktops}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Button Content="{Binding Name}" 
+                                    Click="DesktopButton_Click"
+                                    CommandParameter="{Binding}">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource HeaderButtonStyle}">
+                                        <Style.Triggers>
+                                            <!-- Flat active highlight state -->
+                                            <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                                <Setter Property="Foreground" Value="#FFFFFFFF"/>
+                                                <Setter Property="Template">
+                                                    <Setter.Value>
+                                                        <ControlTemplate TargetType="Button">
+                                                            <Border x:Name="ButtonBorder" 
+                                                                    CornerRadius="5" 
+                                                                    Padding="{TemplateBinding Padding}"
+                                                                    Background="#26FFFFFF" 
+                                                                    SnapsToDevicePixels="True">
+                                                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                            </Border>
+                                                        </ControlTemplate>
+                                                    </Setter.Value>
+                                                </Setter>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Grid>
+        </Border>
 
-            <!-- List of Desktops -->
-            <ItemsControl x:Name="DesktopsList" ItemsSource="{Binding Desktops}">
-                <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center"/>
-                    </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                        <Button Content="{Binding Name}" 
-                                Click="DesktopButton_Click"
-                                CommandParameter="{Binding}">
-                            <Button.Style>
-                                <Style TargetType="Button" BasedOn="{StaticResource HeaderButtonStyle}">
-                                    <Style.Triggers>
-                                        <!-- Flat active highlight state -->
-                                        <DataTrigger Binding="{Binding IsActive}" Value="True">
-                                            <Setter Property="Foreground" Value="#FFFFFFFF"/>
-                                            <Setter Property="Template">
-                                                <Setter.Value>
-                                                    <ControlTemplate TargetType="Button">
-                                                        <Border x:Name="ButtonBorder" 
-                                                                CornerRadius="5" 
-                                                                Padding="{TemplateBinding Padding}"
-                                                                Background="#26FFFFFF" 
-                                                                SnapsToDevicePixels="True">
-                                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                        </Border>
-                                                    </ControlTemplate>
-                                                </Setter.Value>
-                                            </Setter>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                        </Button>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
-        </Grid>
-    </Border>
+        <!-- Sticky Desktop Notes Panel (Right-aligned) -->
+        <Border x:Name="NotesContainer"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Top"
+                Background="#D90C0C0E" 
+                BorderBrush="#1AFFFFFF" 
+                BorderThickness="1,0,1,1" 
+                CornerRadius="0,0,8,8"
+                Width="320"
+                Margin="0">
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="8" ShadowDepth="1" Opacity="0.25" Color="#000000" />
+            </Border.Effect>
+            
+            <Grid x:Name="NotesGrid">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/> <!-- Header preview row -->
+                    <RowDefinition x:Name="EditorRow" Height="0"/> <!-- Text Editor (Height is 0 when collapsed) -->
+                </Grid.RowDefinitions>
+                
+                <!-- Notes Bar Header (Click to expand/collapse) -->
+                <Grid x:Name="NotesHeaderGrid" Grid.Row="0" Height="44" Cursor="Hand" Background="Transparent" MouseLeftButtonDown="NotesHeader_Click">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/> <!-- Status Bullet/Icon -->
+                        <ColumnDefinition Width="*"/>    <!-- Text preview -->
+                        <ColumnDefinition Width="Auto"/> <!-- Expander Indicator -->
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Low-profile notes indicator bullet -->
+                    <Ellipse Grid.Column="0" Width="6" Height="6" Margin="14,0,8,0" Fill="#80FFFFFF" VerticalAlignment="Center"/>
+
+                    <!-- Preview of note's first line -->
+                    <TextBlock x:Name="NotesPreviewBlock"
+                               Grid.Column="1"
+                               Text="{Binding CurrentNotePreview, FallbackValue='Click to add notes...'}"
+                               Foreground="#99FFFFFF"
+                               FontSize="12"
+                               FontFamily="Segoe UI Variable Text, Inter, Segoe UI, Arial"
+                               VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis"
+                               Margin="0,0,12,0"/>
+
+                    <!-- Expand/Collapse toggle icon -->
+                    <TextBlock x:Name="ToggleIndicator"
+                               Grid.Column="2"
+                               Text="▾"
+                               Foreground="#66FFFFFF"
+                               FontSize="12"
+                               VerticalAlignment="Center"
+                               Margin="0,0,14,0"/>
+                </Grid>
+
+                <!-- Expanded Text Editor Area -->
+                <Grid Grid.Row="1" Margin="10,0,10,10">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBox x:Name="NotesTextBox"
+                             Grid.Row="0"
+                             Height="180"
+                             Text="{Binding CurrentNoteText, UpdateSourceTrigger=PropertyChanged}"
+                             AcceptsReturn="True"
+                             AcceptsTab="True"
+                             TextWrapping="Wrap"
+                             VerticalScrollBarVisibility="Auto"
+                             Background="#20000000"
+                             BorderBrush="#20FFFFFF"
+                             BorderThickness="1"
+                             Foreground="#FFFFFFFF"
+                             CaretBrush="#FFFFFFFF"
+                             Padding="6"
+                             FontSize="12"
+                             FontFamily="Segoe UI Variable Text, Inter, Consolas, Arial"
+                             LostFocus="NotesTextBox_LostFocus"/>
+
+                    <Button Grid.Row="1"
+                            Content="Done"
+                            HorizontalAlignment="Right"
+                            Margin="0,8,0,0"
+                            Padding="16,4,16,4"
+                            Click="DoneButton_Click"
+                            Style="{StaticResource HeaderButtonStyle}"/>
+                </Grid>
+            </Grid>
+        </Border>
+    </Grid>
 </Window>
