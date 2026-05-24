@@ -8,6 +8,8 @@ Designed to enhance productivity on multi-desktop Windows setups by keeping your
 
 ## Features
 
+- **Alt+Tab Switcher Exclusion**: Excludes itself from the Windows `Alt+Tab` switcher using both WPF properties (`ShowInTaskbar="False"`) and the native Win32 `WS_EX_TOOLWINDOW` extended style, ensuring the overlay operates as a completely seamless and unobtrusive background workspace utility.
+- **System Tray Integration**: Features a zero-dependency, lightweight system tray icon that runs a context menu allowing the user to easily toggle **Launch at Startup** (written directly to the `HKCU\..\Run` registry) or safely shut down the application via **Exit Overlay**.
 - **Windows AppBar Integration**: Registers natively as a Windows AppBar to reserve the exact screen height for the overlay, ensuring maximizing applications automatically dock below the overlay rather than behind it, leaving a clean workspace offset.
 - **WndProc Callback Hooking**: Hooks directly into native window messages to handle the `ABN_POSCHANGED` Windows Shell callback, ensuring the overlay safely recalculates and re-triggers layouts upon resolution changes, DPI scaling shifts, or virtual desktop switches, preventing silent shell termination.
 - **Virtual Desktop Naming**: Dynamically queries the actual custom names of your virtual desktops (e.g. `'tooling'`) using Windows COM APIs combined with a highly robust Registry reader fallback.

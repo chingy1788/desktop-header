@@ -26,6 +26,15 @@ namespace DesktopHeader.App
         private const string RegistryRunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
         private const string AppRegistryName = "DesktopHeaderOverlay";
 
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
+
+        private const int GWL_EXSTYLE = -20;
+        private const int WS_EX_TOOLWINDOW = 0x00000080;
+
         public MainWindow()
         {
             InitializeComponent();
@@ -55,6 +64,18 @@ namespace DesktopHeader.App
             // Get window handle and attempt initial pinning
             var helper = new WindowInteropHelper(this);
             _windowHandle = helper.Handle;
+
+            // Hide from Alt+Tab by setting WS_EX_TOOLWINDOW extended style
+            try
+            {
+                int exStyle = GetWindowLong(_windowHandle, GWL_EXSTYLE);
+                SetWindowLong(_windowHandle, GWL_EXSTYLE, exStyle | WS_EX_TOOLWINDOW);
+                Logger.LogInfo("Successfully set WS_EX_TOOLWINDOW style to hide overlay from Alt+Tab switcher.");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning($"Failed to set WS_EX_TOOLWINDOW style: {ex.Message}");
+            }
 
             TryPinWindow();
 
@@ -118,32 +139,6 @@ namespace DesktopHeader.App
                     SetLaunchAtStartup(startupItem.Checked);
                 };
                 contextMenu.Items.Add(startupItem);
-
-                contextMenu.Items.Add(new ToolStripSeparator());
-
-                // "Overlay Sizing" sub-menu
-                var heightMenu = new ToolStripMenuItem("Overlay Sizing");
-                
-                var slimItem = new ToolStripMenuItem("Slim Height (46px)");
-                var regularItem = new ToolStripMenuItem("Regular Height (55px)");
-
-                slimItem.Checked = (this.Height == 46);
-                slimItem.Click += (s, e) => {
-                    SetWindowHeight(46);
-                    slimItem.Checked = true;
-                    regularItem.Checked = false;
-                };
-
-                regularItem.Checked = (this.Height == 55 || this.Height == 54.857142857142854);
-                regularItem.Click += (s, e) => {
-                    SetWindowHeight(55);
-                    regularItem.Checked = true;
-                    slimItem.Checked = false;
-                };
-
-                heightMenu.DropDownItems.Add(slimItem);
-                heightMenu.DropDownItems.Add(regularItem);
-                contextMenu.Items.Add(heightMenu);
 
                 contextMenu.Items.Add(new ToolStripSeparator());
 
