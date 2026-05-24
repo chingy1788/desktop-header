@@ -1,6 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Drawing;
+using System.IO;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Forms;
@@ -139,6 +142,13 @@ namespace DesktopHeader.App
                     SetLaunchAtStartup(startupItem.Checked);
                 };
                 contextMenu.Items.Add(startupItem);
+
+                // "Restore Desktops" item
+                var restoreItem = new ToolStripMenuItem("Restore Desktops");
+                restoreItem.Click += (s, e) => {
+                    RestoreDesktops();
+                };
+                contextMenu.Items.Add(restoreItem);
 
                 contextMenu.Items.Add(new ToolStripSeparator());
 
@@ -330,11 +340,13 @@ namespace DesktopHeader.App
                         Logger.LogInfo($"Discovered Desktop [{i}]: '{name}' (Active: {i == currentActiveIndex})");
                     }
                     _lastActiveIndex = currentActiveIndex;
+                    SaveDesktopsBackup();
                 }
                 else
                 {
                     // Otherwise, efficiently update properties individually to avoid flickering
                     bool activeIndexChanged = false;
+                    bool nameChanged = false;
                     for (int i = 0; i < count; i++)
                     {
                         string name = Desktop.DesktopNameFromIndex(i);
@@ -344,6 +356,7 @@ namespace DesktopHeader.App
                         {
                             Logger.LogInfo($"Desktop [{i}] renamed from '{Desktops[i].Name}' to '{name}'.");
                             Desktops[i].Name = name;
+                            nameChanged = true;
                         }
 
                         if (Desktops[i].IsActive != isCurrentActive)
@@ -351,6 +364,11 @@ namespace DesktopHeader.App
                             Desktops[i].IsActive = isCurrentActive;
                             activeIndexChanged = true;
                         }
+                    }
+
+                    if (nameChanged)
+                    {
+                        SaveDesktopsBackup();
                     }
 
                     if (activeIndexChanged && _lastActiveIndex != currentActiveIndex)
@@ -363,6 +381,126 @@ namespace DesktopHeader.App
             catch (Exception ex)
             {
                 Logger.LogError("Error occurred while polling/updating desktops list.", ex);
+            }
+        }
+
+        private void SaveDesktopsBackup()
+        {
+            try
+            {
+                int count = Desktops.Count;
+                if (count <= 0) return;
+
+                // Don't overwrite backup if we only have one desktop and it has a default name (e.g. after PC restart)
+                if (count == 1 && IsDefaultDesktopName(Desktops[0].Name, 0))
+                {
+                    Logger.LogInfo("Skipping automatic backup save: only 1 desktop exists and it has a default name.");
+                    return;
+                }
+
+                var names = Desktops.Select(d => d.Name).ToList();
+                string backupPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "desktops_backup.txt");
+                File.WriteAllLines(backupPath, names);
+                Logger.LogInfo($"Successfully saved {names.Count} desktop names to backup: {backupPath}");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError("Failed to save desktops backup.", ex);
+            }
+        }
+
+        private bool IsDefaultDesktopName(string name, int index)
+        {
+            if (string.IsNullOrEmpty(name)) return true;
+            return string.Equals(name, "Desktop", StringComparison.OrdinalIgnoreCase) || 
+                   string.Equals(name, $"Desktop {index + 1}", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private void RestoreDesktops()
+        {
+            try
+            {
+                string backupPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "desktops_backup.txt");
+                if (!File.Exists(backupPath))
+                {
+                    MessageBox.Show("No saved virtual desktop layout found.\n\nCustom desktops are automatically backed up as you create or rename them.", "Restore Desktops", MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
+
+                var backupNames = File.ReadAllLines(backupPath)
+                                      .Select(line => line.Trim())
+                                      .Where(line => !string.IsNullOrEmpty(line))
+                                      .ToList();
+
+                if (backupNames.Count == 0)
+                {
+                    MessageBox.Show("The saved virtual desktop layout is empty.", "Restore Desktops", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                Logger.LogInfo($"Initiating desktop restoration. Backup contains {backupNames.Count} desktops.");
+
+                int createdCount = 0;
+                int renamedCount = 0;
+
+                for (int i = 0; i < backupNames.Count; i++)
+                {
+                    string targetName = backupNames[i];
+
+                    // Refresh current desktops in each iteration because we might modify them
+                    int currentCount = Desktop.Count;
+                    var currentNames = new List<string>();
+                    for (int j = 0; j < currentCount; j++)
+                    {
+                        currentNames.Add(Desktop.DesktopNameFromIndex(j));
+                    }
+
+                    // 1. Check if a desktop with this target name already exists (case-insensitive)
+                    bool exists = currentNames.Any(c => string.Equals(c, targetName, StringComparison.OrdinalIgnoreCase));
+                    if (exists)
+                    {
+                        Logger.LogInfo($"Desktop '{targetName}' already exists. Skipping.");
+                        continue;
+                    }
+
+                    // 2. If it does not exist, check if the desktop at the same index exists and has a default name
+                    if (i < currentCount && IsDefaultDesktopName(currentNames[i], i))
+                    {
+                        Logger.LogInfo($"Renaming default desktop at index {i} ('{currentNames[i]}') to '{targetName}'...");
+                        Desktop existingDesktop = Desktop.FromIndex(i);
+                        existingDesktop.SetName(targetName);
+                        renamedCount++;
+                    }
+                    else
+                    {
+                        // 3. Otherwise, create a new desktop and set its name
+                        Logger.LogInfo($"Creating new desktop for '{targetName}'...");
+                        Desktop newDesktop = Desktop.Create();
+                        newDesktop.SetName(targetName);
+                        createdCount++;
+                    }
+                }
+
+                // Force layout update immediately after restoring
+                UpdateDesktopsList();
+
+                if (createdCount > 0 || renamedCount > 0)
+                {
+                    string message = "Successfully restored virtual desktops!\n\n";
+                    if (renamedCount > 0) message += $"- Renamed {renamedCount} default desktop(s).\n";
+                    if (createdCount > 0) message += $"- Created {createdCount} new desktop(s).\n";
+                    
+                    MessageBox.Show(message, "Restore Desktops", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+                else
+                {
+                    MessageBox.Show("All backup desktops are already present on this PC.", "Restore Desktops", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError("Failed to restore virtual desktops.", ex);
+                MessageBox.Show($"An error occurred while restoring desktops:\n{ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
