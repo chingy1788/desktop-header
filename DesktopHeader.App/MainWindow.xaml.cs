@@ -148,6 +148,57 @@ namespace DesktopHeader.App
                 restoreItem.Click += (s, e) => {
                     RestoreDesktops();
                 };
+                
+                // Dynamically populate sub-menu on open to show what desktops will be restored
+                contextMenu.Opening += (s, e) => {
+                    try
+                    {
+                        restoreItem.DropDownItems.Clear();
+                        
+                        string backupPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "desktops_backup.txt");
+                        if (File.Exists(backupPath))
+                        {
+                            var backupNames = File.ReadAllLines(backupPath)
+                                                  .Select(line => line.Trim())
+                                                  .Where(line => !string.IsNullOrEmpty(line))
+                                                  .ToList();
+
+                            if (backupNames.Count > 0)
+                            {
+                                var titleItem = new ToolStripMenuItem("Will restore:");
+                                titleItem.Enabled = false;
+                                titleItem.Font = new Font(titleItem.Font, System.Drawing.FontStyle.Bold);
+                                restoreItem.DropDownItems.Add(titleItem);
+                                
+                                restoreItem.DropDownItems.Add(new ToolStripSeparator());
+
+                                foreach (var name in backupNames)
+                                {
+                                    var nameItem = new ToolStripMenuItem(name);
+                                    nameItem.Enabled = false; // Purely informational
+                                    restoreItem.DropDownItems.Add(nameItem);
+                                }
+                            }
+                            else
+                            {
+                                var emptyItem = new ToolStripMenuItem("(Saved layout is empty)");
+                                emptyItem.Enabled = false;
+                                restoreItem.DropDownItems.Add(emptyItem);
+                            }
+                        }
+                        else
+                        {
+                            var noBackupItem = new ToolStripMenuItem("(No saved layout found)");
+                            noBackupItem.Enabled = false;
+                            restoreItem.DropDownItems.Add(noBackupItem);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogError("Failed to populate Restore Desktops sub-menu list.", ex);
+                    }
+                };
+
                 contextMenu.Items.Add(restoreItem);
 
                 contextMenu.Items.Add(new ToolStripSeparator());
