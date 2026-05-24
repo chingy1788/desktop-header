@@ -13,8 +13,8 @@
         Topmost="True" 
         ShowInTaskbar="False" 
         ResizeMode="NoResize"
-        SizeToContent="WidthAndHeight"
-        Loaded="Window_Loaded">
+        Loaded="Window_Loaded"
+        ContentRendered="Window_ContentRendered">
 
     <Window.Resources>
         <!-- Standard Button Style -->
@@ -54,14 +54,13 @@
         </Style>
     </Window.Resources>
 
-    <!-- Draggable main border container docked flush to the top edge -->
+    <!-- Docked header bar fixed to top edge -->
     <Border x:Name="MainContainer"
             Margin="0"
             Background="#EB141416" 
             BorderBrush="#25FFFFFF" 
             BorderThickness="1,0,1,1" 
             CornerRadius="0,0,10,10"
-            MouseLeftButtonDown="MainContainer_MouseLeftButtonDown"
             HorizontalAlignment="Center"
             VerticalAlignment="Top">
         <Border.Effect>
@@ -69,21 +68,9 @@
         </Border.Effect>
         
         <Grid Margin="6,3,6,3">
-            <Grid.ColumnDefinitions>
-                <!-- Drag Handle -->
-                <ColumnDefinition Width="Auto"/>
-                <!-- Button List -->
-                <ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
-
-            <!-- Drag Handle indicator -->
-            <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="6,0,8,0" Orientation="Horizontal" Cursor="SizeAll">
-                <Rectangle Width="2" Height="14" Fill="#3FFFFFFF" Margin="1,0,1,0" RadiusX="1" RadiusY="1"/>
-                <Rectangle Width="2" Height="14" Fill="#3FFFFFFF" Margin="1,0,1,0" RadiusX="1" RadiusY="1"/>
-            </StackPanel>
 
             <!-- List of Desktops -->
-            <ItemsControl Grid.Column="1" x:Name="DesktopsList" ItemsSource="{Binding Desktops}">
+            <ItemsControl x:Name="DesktopsList" ItemsSource="{Binding Desktops}">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center"/>

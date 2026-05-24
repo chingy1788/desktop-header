@@ -8,7 +8,8 @@ Designed to enhance productivity on multi-desktop Windows setups by keeping your
 
 ## Features
 
-- **Docked Header Bar**: Sits flush at the top edge of the primary screen, styled with a modern glassmorphic look (dark charcoal acrylic backdrop with bottom rounded corners, fine semi-transparent borders, and a soft drop shadow).
+- **Windows AppBar Integration**: Registers natively as a Windows AppBar to reserve the exact screen height for the overlay, ensuring maximizing applications automatically dock below the overlay rather than behind it, leaving a clean workspace offset.
+- **WndProc Callback Hooking**: Hooks directly into native window messages to handle the `ABN_POSCHANGED` Windows Shell callback, ensuring the overlay safely recalculates and re-triggers layouts upon resolution changes, DPI scaling shifts, or virtual desktop switches, preventing silent shell termination.
 - **Virtual Desktop Naming**: Dynamically queries the actual custom names of your virtual desktops (e.g. `'tooling'`) using Windows COM APIs combined with a highly robust Registry reader fallback.
 - **Topmost & Sticky (Pinning)**: Automatically registers and pins itself to the Windows Shell so that it persists and displays seamlessly across **all** virtual desktops.
 - **Click-to-Switch Navigation**: Instantly switches active desktops when you click on a desktop name, complete with optimistic state-switching for a fluid, lag-free click feel.
@@ -26,6 +27,7 @@ Built with C# .NET 9.0 and Windows Presentation Foundation (WPF) for hardware-ac
 - **DesktopHeader.App**: Main WPF GUI application.
   - `Models/DesktopItem.cs`: Core data model representing individual desktop properties and binding updates via `INotifyPropertyChanged`.
   - `Interop/VirtualDesktopWrapper.cs`: Undocumented COM API definitions specifically tailored to Windows 11 (24H2/25H2/Build 26200+), featuring a customized `.NET Core` marshaller for the `IApplicationView` shell interface.
+  - `AppBarHelper.cs`: Helper class handling safe Shell AppBar registrations, workspace reservations, native WndProc hooks (`ABN_POSCHANGED`), and horizonal centering calculations.
   - `MainWindow.xaml`: XAML UI definition specifying the glassmorphic style tokens, capsule gradient hover effects, layout, and active state triggers.
   - `MainWindow.xaml.cs`: Visual code-behind handling load centering, manual dragging, optimistic switching, and self-healing background retry pinning.
   - `Logger.cs`: Thread-safe, file-based logger writing to `debug.log`.
@@ -49,7 +51,7 @@ This compiles the application and outputs the binaries to `DesktopHeader.App\bin
 ### Running the Application
 Double-click `DesktopHeader.App.exe` or launch it via PowerShell:
 ```powershell
-Start-Process -FilePath ".\DesktopHeader.App\bin\Debug\net9.0-windows\DesktopHeader.App.exe"
+Start-Process -FilePath ".\DesktopHeader.App\bin\Release\net9.0-windows\DesktopHeader.App.exe"
 ```
 
 ---
@@ -59,27 +61,33 @@ Start-Process -FilePath ".\DesktopHeader.App\bin\Debug\net9.0-windows\DesktopHea
 All events are logged directly to a `debug.log` file created in the application's startup directory. The log tracks key cycles:
 - **WPF Initialization**: Overlay starting and parameter setups.
 - **Active Desktops Discovery**: Registry and COM queries listing names and active indexes.
+- **AppBar Sizing and Native Hooks**: Captures real-time `ABN_POSCHANGED` messages and bounds calculations.
 - **Dynamic Retry Pinning**: Captures the self-healing cycles of pinning the window across Windows Virtual Desktops.
 - **Navigation Triggers**: Capture click events and target indexes.
 
 Example log output:
 ```text
-[2026-05-24 09:39:30.479] [INFO] Desktop Header Overlay initializing...
-[2026-05-24 09:39:30.545] [INFO] MainWindow Loaded. Setting up window parameters...
-[2026-05-24 09:39:30.559] [INFO] Desktop count changed from 0 to 2. Rebuilding list...
-[2026-05-24 09:39:30.561] [INFO] Discovered Desktop [0]: 'Desktop 1' (Active: True)
-[2026-05-24 09:39:30.562] [INFO] Discovered Desktop [1]: 'tooling' (Active: False)
-[2026-05-24 09:39:30.564] [WARN] Initial pin attempt failed (shell may not have registered window yet)...
-[2026-05-24 09:39:30.564] [INFO] Polling timer started. Initially loaded 2 desktops.
-[2026-05-24 09:39:30.822] [INFO] Successfully pinned MainWindow (hWnd: 1640656) to all virtual desktops on attempt 2.
+[2026-05-24 11:47:56.307] [INFO] MainWindow Loaded. Setting up window parameters...
+[2026-05-24 11:47:56.433] [INFO] Successfully pinned MainWindow (hWnd: 1771704) to all virtual desktops on attempt 1.
+[2026-05-24 11:47:56.707] [INFO] AppBar resized successfully. WorkArea Reserved Height: 96px. Bounds: L=0, T=0, R=1645, B=96
+[2026-05-24 11:47:56.708] [INFO] Successfully registered Window as Windows AppBar.
+[2026-05-24 11:47:57.062] [INFO] AppBar received ABN_POSCHANGED from Windows Shell. Re-triggering layout...
+[2026-05-24 11:47:57.066] [INFO] AppBar resized successfully. WorkArea Reserved Height: 96px. Bounds: L=0, T=0, R=1645, B=96
 ```
 
 ---
 
 ## Testing
 
-### Automated Unit Tests
-To run unit tests validating property change triggers, name query formats, and Registry bindings:
+### Running Tests
+To run all unit tests:
+```powershell
+dotnet test --configuration Release
+```
+
+*Note: UI Automation tests (using FlaUI) require an active, interactive GUI session. In headless or CI environments (like GitHub Actions), the UI scenarios will automatically skip themselves programmatically using `SKIP_UI_TESTS=true` or GITHUB_ACTIONS checks to prevent builds from hanging, ensuring the CI pipeline always stays perfectly green.*
+
+To explicitly run only unit tests (safe for all headless and non-interactive runs):
 ```powershell
 dotnet test --filter "FullyQualifiedName!~UI_Scenario"
 ```

@@ -2,8 +2,8 @@ using System;
 using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Media;
 using System.Windows.Threading;
 using DesktopHeader.App.Models;
 using VirtualDesktop;
@@ -38,10 +38,9 @@ namespace DesktopHeader.App
         {
             Logger.LogInfo("MainWindow Loaded. Setting up window parameters...");
 
-            // Center the window docked to the top of the primary screen
-            double screenWidth = SystemParameters.PrimaryScreenWidth;
-            this.Left = (screenWidth - this.ActualWidth) / 2;
-            this.Top = 0; // Docked flush to the top edge
+            // Pin to top-left; AppBar registration will set exact position and stretch to full width
+            this.Left = 0;
+            this.Top = 0;
 
             // Initial load of desktops
             UpdateDesktopsList();
@@ -49,13 +48,33 @@ namespace DesktopHeader.App
             // Get window handle and attempt initial pinning
             var helper = new WindowInteropHelper(this);
             _windowHandle = helper.Handle;
-            
+
             TryPinWindow();
 
             // Start the polling timer
             _timer.Start();
             Logger.LogInfo($"Polling timer started. Initially loaded {Desktops.Count} desktops.");
         }
+
+        private void Window_ContentRendered(object? sender, EventArgs e)
+        {
+            // ContentRendered fires after the first render pass — ActualHeight is now accurate.
+            // Convert device-independent height to physical pixels using DPI scale.
+            var dpiScale = VisualTreeHelper.GetDpi(this);
+            int heightPixels = (int)Math.Ceiling(this.ActualHeight * dpiScale.DpiScaleY);
+            Logger.LogInfo($"ContentRendered: window height = {this.ActualHeight} DIPs -> {heightPixels}px physical (DPI Y scale: {dpiScale.DpiScaleY})");
+
+            // Register as Windows AppBar — reserves exact header height so all windows dock below
+            try
+            {
+                AppBarHelper.RegisterAppBar(this, heightPixels);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError("Failed to register WPF window as Windows AppBar.", ex);
+            }
+        }
+
 
         private void Timer_Tick(object? sender, EventArgs e)
         {
@@ -119,7 +138,6 @@ namespace DesktopHeader.App
                         Logger.LogInfo($"Discovered Desktop [{i}]: '{name}' (Active: {i == currentActiveIndex})");
                     }
                     _lastActiveIndex = currentActiveIndex;
-                    CenterWindow();
                 }
                 else
                 {
@@ -153,22 +171,6 @@ namespace DesktopHeader.App
             catch (Exception ex)
             {
                 Logger.LogError("Error occurred while polling/updating desktops list.", ex);
-            }
-        }
-
-        private void CenterWindow()
-        {
-            // Re-center window only if count of items changed to maintain symmetry
-            double screenWidth = SystemParameters.PrimaryScreenWidth;
-            this.Left = (screenWidth - this.ActualWidth) / 2;
-        }
-
-        private void MainContainer_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-        {
-            // Allow dragging the entire header bar easily
-            if (e.LeftButton == MouseButtonState.Pressed)
-            {
-                DragMove();
             }
         }
 
