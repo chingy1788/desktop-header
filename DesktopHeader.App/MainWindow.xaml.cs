@@ -1,12 +1,16 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Drawing;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Forms;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
 using DesktopHeader.App.Models;
 using VirtualDesktop;
+using Button = System.Windows.Controls.Button;
+using MessageBox = System.Windows.MessageBox;
 
 namespace DesktopHeader.App
 {
@@ -18,6 +22,9 @@ namespace DesktopHeader.App
         private bool _isPinned = false;
         private IntPtr _windowHandle = IntPtr.Zero;
         private int _pinRetryCount = 0;
+        private NotifyIcon? _notifyIcon;
+        private const string RegistryRunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
+        private const string AppRegistryName = "DesktopHeaderOverlay";
 
         public MainWindow()
         {
@@ -51,6 +58,9 @@ namespace DesktopHeader.App
 
             TryPinWindow();
 
+            // Initialize system tray icon
+            InitializeTrayIcon();
+
             // Start the polling timer
             _timer.Start();
             Logger.LogInfo($"Polling timer started. Initially loaded {Desktops.Count} desktops.");
@@ -75,6 +85,167 @@ namespace DesktopHeader.App
             }
         }
 
+        private void InitializeTrayIcon()
+        {
+            try
+            {
+                _notifyIcon = new NotifyIcon();
+                _notifyIcon.Text = "Virtual Desktop Header Overlay";
+
+                // Load app icon dynamically from the current process
+                System.Drawing.Icon? appIcon = null;
+                try
+                {
+                    string? processPath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName;
+                    if (processPath != null)
+                    {
+                        appIcon = System.Drawing.Icon.ExtractAssociatedIcon(processPath);
+                    }
+                }
+                catch { }
+
+                _notifyIcon.Icon = appIcon ?? SystemIcons.Application;
+                _notifyIcon.Visible = true;
+
+                // Create context menu
+                var contextMenu = new ContextMenuStrip();
+
+                // "Launch at Startup" item
+                var startupItem = new ToolStripMenuItem("Launch at Startup");
+                startupItem.CheckOnClick = true;
+                startupItem.Checked = IsLaunchAtStartupEnabled();
+                startupItem.Click += (s, e) => {
+                    SetLaunchAtStartup(startupItem.Checked);
+                };
+                contextMenu.Items.Add(startupItem);
+
+                contextMenu.Items.Add(new ToolStripSeparator());
+
+                // "Overlay Sizing" sub-menu
+                var heightMenu = new ToolStripMenuItem("Overlay Sizing");
+                
+                var slimItem = new ToolStripMenuItem("Slim Height (46px)");
+                var regularItem = new ToolStripMenuItem("Regular Height (55px)");
+
+                slimItem.Checked = (this.Height == 46);
+                slimItem.Click += (s, e) => {
+                    SetWindowHeight(46);
+                    slimItem.Checked = true;
+                    regularItem.Checked = false;
+                };
+
+                regularItem.Checked = (this.Height == 55 || this.Height == 54.857142857142854);
+                regularItem.Click += (s, e) => {
+                    SetWindowHeight(55);
+                    regularItem.Checked = true;
+                    slimItem.Checked = false;
+                };
+
+                heightMenu.DropDownItems.Add(slimItem);
+                heightMenu.DropDownItems.Add(regularItem);
+                contextMenu.Items.Add(heightMenu);
+
+                contextMenu.Items.Add(new ToolStripSeparator());
+
+                // "Exit Overlay" item
+                var exitItem = new ToolStripMenuItem("Exit Overlay");
+                exitItem.Click += (s, e) => {
+                    Logger.LogInfo("Exit selected from System Tray. Shutting down...");
+                    System.Windows.Application.Current.Shutdown();
+                };
+                contextMenu.Items.Add(exitItem);
+
+                _notifyIcon.ContextMenuStrip = contextMenu;
+
+                // Cleanup on window closing
+                this.Closing += (s, e) => {
+                    if (_notifyIcon != null)
+                    {
+                        _notifyIcon.Visible = false;
+                        _notifyIcon.Dispose();
+                    }
+                };
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError("Failed to initialize system tray icon.", ex);
+            }
+        }
+
+        private void SetWindowHeight(int height)
+        {
+            try
+            {
+                Logger.LogInfo($"Re-sizing overlay layout to height: {height}px...");
+                this.Height = height;
+                
+                // Re-register AppBar to recalculate reservations
+                var dpiScale = VisualTreeHelper.GetDpi(this);
+                int heightPixels = (int)Math.Ceiling(height * dpiScale.DpiScaleY);
+                
+                // AppBarHelper.SizeAppBar will re-apply the bounds
+                AppBarHelper.SizeAppBar(this, heightPixels);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError($"Failed to change window height to {height}.", ex);
+            }
+        }
+
+        private bool IsLaunchAtStartupEnabled()
+        {
+            try
+            {
+                using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RegistryRunKey))
+                {
+                    if (key != null)
+                    {
+                        object? val = key.GetValue(AppRegistryName);
+                        return val != null;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError("Failed to read startup registry key.", ex);
+            }
+            return false;
+        }
+
+        private void SetLaunchAtStartup(bool enable)
+        {
+            try
+            {
+                using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RegistryRunKey, true))
+                {
+                    if (key != null)
+                    {
+                        if (enable)
+                        {
+                            string? execPath = Environment.ProcessPath ?? System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName;
+                            if (execPath != null)
+                            {
+                                key.SetValue(AppRegistryName, $"\"{execPath}\"");
+                                Logger.LogInfo($"Successfully enabled launch at startup pointing to: {execPath}");
+                            }
+                            else
+                            {
+                                Logger.LogError("Failed to determine executable path for startup registration.");
+                            }
+                        }
+                        else
+                        {
+                            key.DeleteValue(AppRegistryName, false);
+                            Logger.LogInfo("Successfully disabled launch at startup.");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError("Failed to modify startup registry key.", ex);
+            }
+        }
 
         private void Timer_Tick(object? sender, EventArgs e)
         {
