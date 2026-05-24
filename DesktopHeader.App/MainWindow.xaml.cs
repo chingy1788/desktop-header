@@ -441,7 +441,6 @@ namespace DesktopHeader.App
                 Logger.LogInfo($"Initiating desktop restoration. Backup contains {backupNames.Count} desktops.");
 
                 int createdCount = 0;
-                int renamedCount = 0;
 
                 for (int i = 0; i < backupNames.Count; i++)
                 {
@@ -455,7 +454,7 @@ namespace DesktopHeader.App
                         currentNames.Add(Desktop.DesktopNameFromIndex(j));
                     }
 
-                    // 1. Check if a desktop with this target name already exists (case-insensitive)
+                    // Check if a desktop with this target name already exists (case-insensitive)
                     bool exists = currentNames.Any(c => string.Equals(c, targetName, StringComparison.OrdinalIgnoreCase));
                     if (exists)
                     {
@@ -463,34 +462,19 @@ namespace DesktopHeader.App
                         continue;
                     }
 
-                    // 2. If it does not exist, check if the desktop at the same index exists and has a default name
-                    if (i < currentCount && IsDefaultDesktopName(currentNames[i], i))
-                    {
-                        Logger.LogInfo($"Renaming default desktop at index {i} ('{currentNames[i]}') to '{targetName}'...");
-                        Desktop existingDesktop = Desktop.FromIndex(i);
-                        existingDesktop.SetName(targetName);
-                        renamedCount++;
-                    }
-                    else
-                    {
-                        // 3. Otherwise, create a new desktop and set its name
-                        Logger.LogInfo($"Creating new desktop for '{targetName}'...");
-                        Desktop newDesktop = Desktop.Create();
-                        newDesktop.SetName(targetName);
-                        createdCount++;
-                    }
+                    // Create a new desktop and set its name
+                    Logger.LogInfo($"Creating new desktop for '{targetName}'...");
+                    Desktop newDesktop = Desktop.Create();
+                    newDesktop.SetName(targetName);
+                    createdCount++;
                 }
 
                 // Force layout update immediately after restoring
                 UpdateDesktopsList();
 
-                if (createdCount > 0 || renamedCount > 0)
+                if (createdCount > 0)
                 {
-                    string message = "Successfully restored virtual desktops!\n\n";
-                    if (renamedCount > 0) message += $"- Renamed {renamedCount} default desktop(s).\n";
-                    if (createdCount > 0) message += $"- Created {createdCount} new desktop(s).\n";
-                    
-                    MessageBox.Show(message, "Restore Desktops", MessageBoxButton.OK, MessageBoxImage.Information);
+                    MessageBox.Show($"Successfully restored virtual desktops!\n\n- Created {createdCount} new desktop(s).", "Restore Desktops", MessageBoxButton.OK, MessageBoxImage.Information);
                 }
                 else
                 {
