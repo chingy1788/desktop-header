@@ -54,7 +54,7 @@
         </Style>
     </Window.Resources>
 
-    <Grid x:Name="LayoutRoot" Background="Transparent">
+    <Grid x:Name="LayoutRoot" Background="Transparent" SizeChanged="LayoutRoot_SizeChanged">
         <!-- Low-profile Docked Header Bar (Left-aligned) -->
         <Border x:Name="MainContainer"
                 Margin="0"
@@ -64,7 +64,8 @@
                 BorderThickness="1,0,1,1" 
                 CornerRadius="0,0,8,8"
                 HorizontalAlignment="Left"
-                VerticalAlignment="Top">
+                VerticalAlignment="Top"
+                SizeChanged="MainContainer_SizeChanged">
             <Border.Effect>
                 <DropShadowEffect BlurRadius="8" ShadowDepth="1" Opacity="0.25" Color="#000000" />
             </Border.Effect>
@@ -199,5 +200,84 @@
                 </Grid>
             </Grid>
         </Border>
+
+        <!-- Collapsed Sticky Notes Button (Right-aligned, visible when space is tight) -->
+        <Border x:Name="CollapsedNotesButton"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Top"
+                Background="#D90C0C0E" 
+                BorderBrush="#1AFFFFFF" 
+                BorderThickness="1,0,1,1" 
+                CornerRadius="0,0,8,8"
+                Height="46"
+                Width="46"
+                Margin="0"
+                Visibility="Collapsed">
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="8" ShadowDepth="1" Opacity="0.25" Color="#000000" />
+            </Border.Effect>
+            <Button Style="{StaticResource HeaderButtonStyle}"
+                    Padding="0"
+                    Margin="0"
+                    Width="44"
+                    Height="44"
+                    Click="CollapsedNotesButton_Click"
+                    ToolTip="Active Desktop Notes">
+                <TextBlock Text="📝" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Button>
+        </Border>
+
+        <!-- Popup for Collapsed Notes -->
+        <Popup x:Name="NotesPopup" 
+               PlacementTarget="{Binding ElementName=CollapsedNotesButton}" 
+               Placement="Bottom" 
+               AllowsTransparency="True" 
+               StaysOpen="False" 
+               PopupAnimation="Fade"
+               HorizontalOffset="-274"
+               VerticalOffset="4">
+            <Border Background="#D90C0C0E" 
+                    BorderBrush="#1AFFFFFF" 
+                    BorderThickness="1" 
+                    CornerRadius="8" 
+                    Width="320" 
+                    Padding="10">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="8" ShadowDepth="1" Opacity="0.25" Color="#000000" />
+                </Border.Effect>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    
+                    <TextBox x:Name="PopupNotesTextBox"
+                             Grid.Row="0"
+                             Height="180"
+                             Text="{Binding CurrentNoteText, UpdateSourceTrigger=PropertyChanged}"
+                             AcceptsReturn="True"
+                             AcceptsTab="True"
+                             TextWrapping="Wrap"
+                             VerticalScrollBarVisibility="Auto"
+                             Background="#20000000"
+                             BorderBrush="#20FFFFFF"
+                             BorderThickness="1"
+                             Foreground="#FFFFFFFF"
+                             CaretBrush="#FFFFFFFF"
+                             Padding="6"
+                             FontSize="12"
+                             FontFamily="Segoe UI Variable Text, Inter, Consolas, Arial"
+                             LostFocus="NotesTextBox_LostFocus"/>
+                             
+                    <Button Grid.Row="1"
+                            Content="Done"
+                            HorizontalAlignment="Right"
+                            Margin="0,8,0,0"
+                            Padding="16,4,16,4"
+                            Click="PopupDoneButton_Click"
+                            Style="{StaticResource HeaderButtonStyle}"/>
+                </Grid>
+            </Border>
+        </Popup>
     </Grid>
 </Window>

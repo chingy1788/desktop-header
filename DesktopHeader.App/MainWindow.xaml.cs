@@ -94,6 +94,9 @@ namespace DesktopHeader.App
             // Start the polling timer
             _timer.Start();
             Logger.LogInfo($"Polling timer started. Initially loaded {Desktops.Count} desktops.");
+
+            // Run initial responsive layout check after window loaded
+            Dispatcher.BeginInvoke(new Action(() => UpdateNotesVisibility()), DispatcherPriority.Background);
         }
 
         private void Window_ContentRendered(object? sender, EventArgs e)
@@ -548,6 +551,7 @@ namespace DesktopHeader.App
                         _lastActiveIndex = currentActiveIndex;
                     }
                 }
+                UpdateNotesVisibility();
             }
             catch (Exception ex)
             {
@@ -857,6 +861,103 @@ namespace DesktopHeader.App
             // Auto-save on collapse
             SaveCurrentDesktopNote();
             Logger.LogInfo("Collapsed Notes panel.");
+        }
+
+        private void LayoutRoot_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            UpdateNotesVisibility();
+        }
+
+        private void MainContainer_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            UpdateNotesVisibility();
+        }
+
+        private void UpdateNotesVisibility()
+        {
+            try
+            {
+                double windowWidth = LayoutRoot.ActualWidth;
+                if (windowWidth <= 0)
+                {
+                    windowWidth = this.Width;
+                }
+
+                // If MainContainer isn't laid out yet, it defaults to 0. In that case, we can estimate.
+                double desktopsWidth = MainContainer.ActualWidth;
+                if (desktopsWidth <= 0 && Desktops.Count > 0)
+                {
+                    // Estimate size: each button is around 100px on average, plus padding/margins
+                    desktopsWidth = Desktops.Count * 90 + 30;
+                }
+
+                // The standard NotesContainer has a fixed width of 320 DIPs.
+                // We add a safety buffer of 40 DIPs to prevent visual overlaps or tight squeezing.
+                double requiredWidth = desktopsWidth + 320 + 40;
+
+                if (windowWidth > 0 && requiredWidth > windowWidth)
+                {
+                    if (NotesContainer.Visibility != Visibility.Collapsed)
+                    {
+                        Logger.LogInfo($"Space is tight ({requiredWidth}px required vs {windowWidth}px available). Collapsing Notes to a button.");
+                        NotesContainer.Visibility = Visibility.Collapsed;
+                        CollapsedNotesButton.Visibility = Visibility.Visible;
+                        
+                        // Close full notes editing panel and save
+                        CollapseNotes();
+                    }
+                }
+                else
+                {
+                    if (NotesContainer.Visibility != Visibility.Visible)
+                    {
+                        Logger.LogInfo($"Ample space detected ({requiredWidth}px required vs {windowWidth}px available). Restoring Notes panel.");
+                        NotesContainer.Visibility = Visibility.Visible;
+                        CollapsedNotesButton.Visibility = Visibility.Collapsed;
+                        
+                        // Also close the popup if it was open
+                        if (NotesPopup.IsOpen)
+                        {
+                            NotesPopup.IsOpen = false;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError("Error during UpdateNotesVisibility evaluation.", ex);
+            }
+        }
+
+        private void CollapsedNotesButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                NotesPopup.IsOpen = !NotesPopup.IsOpen;
+                if (NotesPopup.IsOpen)
+                {
+                    Logger.LogInfo("Opened Collapsed Notes Popup editor.");
+                    // Focus the text box in popup and position caret at end
+                    PopupNotesTextBox.Focus();
+                    PopupNotesTextBox.SelectionStart = PopupNotesTextBox.Text?.Length ?? 0;
+                }
+                else
+                {
+                    Logger.LogInfo("Closed Collapsed Notes Popup editor.");
+                    SaveCurrentDesktopNote();
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError("Failed to toggle Collapsed Notes Popup.", ex);
+            }
+        }
+
+        private void PopupDoneButton_Click(object sender, RoutedEventArgs e)
+        {
+            NotesPopup.IsOpen = false;
+            SaveCurrentDesktopNote();
+            Logger.LogInfo("Closed Collapsed Notes Popup editor via Done button click.");
         }
 
         #endregion

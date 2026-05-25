@@ -230,6 +230,82 @@ namespace DesktopHeader.Tests
             }
         }
 
+        /*
+         * Scenario: Notes panel collapses to button when space is insufficient
+         *   Given the header bar is visible
+         *   When the window width is reduced so that required space exceeds available width
+         *   Then the Notes panel should be collapsed
+         *   And the Collapsed Notes Button should be visible
+         *   
+         * Scenario: Notes panel is restored when space is ample
+         *   Given the Collapsed Notes Button is visible
+         *   When the window width is increased to be ample
+         *   Then the Notes panel should be visible
+         *   And the Collapsed Notes Button should be collapsed
+         */
+        [Fact]
+        public void UI_Scenario_NotesCollapseAndRestoreOnResize()
+        {
+            if (!Environment.UserInteractive || Environment.GetEnvironmentVariable("GITHUB_ACTIONS") != null || Environment.GetEnvironmentVariable("SKIP_UI_TESTS") == "true")
+            {
+                return; // Skip FlaUI tests in headless/non-interactive environment
+            }
+
+            string appPath = GetAppPath();
+            using var app = Application.Launch(appPath);
+            using var automation = new UIA3Automation();
+            
+            try
+            {
+                var window = app.GetMainWindow(automation, TimeSpan.FromSeconds(5));
+                Assert.NotNull(window);
+
+                // Wait for layout to settle
+                System.Threading.Thread.Sleep(500);
+
+                // Find the elements
+                var notesContainer = window.FindFirstDescendant(cf => cf.ByAutomationId("NotesContainer"));
+                var collapsedButton = window.FindFirstDescendant(cf => cf.ByAutomationId("CollapsedNotesButton"));
+
+                Assert.NotNull(notesContainer);
+                Assert.NotNull(collapsedButton);
+
+                // 1. Initially, window is wide (e.g. screenWidth). It should have ample space.
+                // Verify NotesContainer is visible (i.e. not offscreen/collapsed) and collapsedButton is collapsed.
+                Assert.False(notesContainer.IsOffscreen, "Notes panel should be visible when space is ample.");
+                Assert.True(collapsedButton.IsOffscreen, "Collapsed Notes Button should not be visible when space is ample.");
+
+                // 2. Reduce window width to force collapsing
+                var transformPattern = window.Patterns.Transform.PatternOrDefault;
+                if (transformPattern != null)
+                {
+                    var currentHeight = window.Properties.BoundingRectangle.Value.Height;
+                    transformPattern.Resize(400, currentHeight);
+                }
+                System.Threading.Thread.Sleep(500); // Wait for SizeChanged layout pass
+
+                // Verify notesContainer is now collapsed/offscreen, and collapsedButton is visible.
+                Assert.True(notesContainer.IsOffscreen, "Notes panel should collapse when width is restricted.");
+                Assert.False(collapsedButton.IsOffscreen, "Collapsed Notes Button should become visible when width is restricted.");
+
+                // 3. Restore window width
+                if (transformPattern != null)
+                {
+                    var currentHeight = window.Properties.BoundingRectangle.Value.Height;
+                    transformPattern.Resize(1920, currentHeight);
+                }
+                System.Threading.Thread.Sleep(500); // Wait for SizeChanged layout pass
+
+                // Verify restored state
+                Assert.False(notesContainer.IsOffscreen, "Notes panel should restore when width is expanded.");
+                Assert.True(collapsedButton.IsOffscreen, "Collapsed Notes Button should hide when width is expanded.");
+            }
+            finally
+            {
+                try { app.Close(); } catch { }
+            }
+        }
+
         #endregion
     }
 }
