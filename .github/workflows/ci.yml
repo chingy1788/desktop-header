@@ -1,0 +1,46 @@
+name: CI & Build Release
+
+on:
+  push:
+    branches: [ master ]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET SDK
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '9.0.x'
+
+    - name: Restore Dependencies
+      run: dotnet restore
+
+    - name: Build Solution
+      run: dotnet build -c Release --no-restore
+
+    - name: Run Unit Tests
+      run: dotnet test -c Release --no-build --filter "FullyQualifiedName!~UI_Scenario"
+
+    - name: Publish Application
+      run: dotnet publish DesktopHeader.App/DesktopHeader.App.csproj -c Release -r win-x64 --self-contained false -o publish_out
+
+    - name: Package Artifact
+      shell: pwsh
+      run: |
+        Compress-Archive -Path publish_out\* -DestinationPath DesktopHeaderOverlay.zip
+
+    - name: Create GitHub Release
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      shell: pwsh
+      run: |
+        $version = "v1.0.${{ github.run_number }}"
+        gh release create $version DesktopHeaderOverlay.zip --title "Release $version" --notes "Automated production build for Windows Virtual Desktop Header Overlay. Includes individual and multi-tool development workspace spawners from the system tray."
