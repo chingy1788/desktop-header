@@ -819,48 +819,11 @@ namespace DesktopHeader.App
             }
         }
 
-        private void NotesHeader_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
-        {
-            if (EditorRow.Height.Value == 0)
-            {
-                ExpandNotes();
-            }
-            else
-            {
-                CollapseNotes();
-            }
-        }
-
-        private void DoneButton_Click(object sender, RoutedEventArgs e)
-        {
-            CollapseNotes();
-        }
 
         private void NotesTextBox_LostFocus(object sender, RoutedEventArgs e)
         {
             // Auto-save on focus loss
             SaveCurrentDesktopNote();
-        }
-
-        private void ExpandNotes()
-        {
-            EditorRow.Height = new GridLength(234); // Expand row 1 height to fit TextBox + Done Button
-            ToggleIndicator.Text = "▴";
-            
-            // Focus the text box
-            NotesTextBox.Focus();
-            NotesTextBox.SelectionStart = NotesTextBox.Text?.Length ?? 0;
-            Logger.LogInfo("Expanded Notes panel.");
-        }
-
-        private void CollapseNotes()
-        {
-            EditorRow.Height = new GridLength(0); // Collapse row 1
-            ToggleIndicator.Text = "▾";
-            
-            // Auto-save on collapse
-            SaveCurrentDesktopNote();
-            Logger.LogInfo("Collapsed Notes panel.");
         }
 
         private void LayoutRoot_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -891,35 +854,25 @@ namespace DesktopHeader.App
                     desktopsWidth = Desktops.Count * 90 + 30;
                 }
 
-                // The standard NotesContainer has a fixed width of 320 DIPs.
-                // We add a safety buffer of 40 DIPs to prevent visual overlaps or tight squeezing.
-                double requiredWidth = desktopsWidth + 320 + 40;
+                // The standard NotesButton has a fixed width of 46 DIPs.
+                // We add a safety buffer of 20 DIPs to prevent visual overlaps.
+                double requiredWidth = desktopsWidth + 46 + 20;
 
                 if (windowWidth > 0 && requiredWidth > windowWidth)
                 {
-                    if (NotesContainer.Visibility != Visibility.Collapsed)
+                    if (NotesButton.Visibility != Visibility.Collapsed)
                     {
-                        Logger.LogInfo($"Space is tight ({requiredWidth}px required vs {windowWidth}px available). Collapsing Notes to a button.");
-                        NotesContainer.Visibility = Visibility.Collapsed;
-                        CollapsedNotesButton.Visibility = Visibility.Visible;
-                        
-                        // Close full notes editing panel and save
-                        CollapseNotes();
+                        Logger.LogInfo($"Space is extremely tight ({requiredWidth}px required vs {windowWidth}px available). Hiding Notes button.");
+                        NotesButton.Visibility = Visibility.Collapsed;
+                        NotesPopup.IsOpen = false;
                     }
                 }
                 else
                 {
-                    if (NotesContainer.Visibility != Visibility.Visible)
+                    if (NotesButton.Visibility != Visibility.Visible)
                     {
-                        Logger.LogInfo($"Ample space detected ({requiredWidth}px required vs {windowWidth}px available). Restoring Notes panel.");
-                        NotesContainer.Visibility = Visibility.Visible;
-                        CollapsedNotesButton.Visibility = Visibility.Collapsed;
-                        
-                        // Also close the popup if it was open
-                        if (NotesPopup.IsOpen)
-                        {
-                            NotesPopup.IsOpen = false;
-                        }
+                        Logger.LogInfo($"Space is sufficient ({requiredWidth}px required vs {windowWidth}px available). Restoring Notes button.");
+                        NotesButton.Visibility = Visibility.Visible;
                     }
                 }
             }
@@ -929,27 +882,27 @@ namespace DesktopHeader.App
             }
         }
 
-        private void CollapsedNotesButton_Click(object sender, RoutedEventArgs e)
+        private void NotesButton_Click(object sender, RoutedEventArgs e)
         {
             try
             {
                 NotesPopup.IsOpen = !NotesPopup.IsOpen;
                 if (NotesPopup.IsOpen)
                 {
-                    Logger.LogInfo("Opened Collapsed Notes Popup editor.");
+                    Logger.LogInfo("Opened Notes Popup editor.");
                     // Focus the text box in popup and position caret at end
                     PopupNotesTextBox.Focus();
                     PopupNotesTextBox.SelectionStart = PopupNotesTextBox.Text?.Length ?? 0;
                 }
                 else
                 {
-                    Logger.LogInfo("Closed Collapsed Notes Popup editor.");
+                    Logger.LogInfo("Closed Notes Popup editor.");
                     SaveCurrentDesktopNote();
                 }
             }
             catch (Exception ex)
             {
-                Logger.LogError("Failed to toggle Collapsed Notes Popup.", ex);
+                Logger.LogError("Failed to toggle Notes Popup.", ex);
             }
         }
 
@@ -957,7 +910,7 @@ namespace DesktopHeader.App
         {
             NotesPopup.IsOpen = false;
             SaveCurrentDesktopNote();
-            Logger.LogInfo("Closed Collapsed Notes Popup editor via Done button click.");
+            Logger.LogInfo("Closed Notes Popup editor via Done button click.");
         }
 
         #endregion

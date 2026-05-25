@@ -231,20 +231,18 @@ namespace DesktopHeader.Tests
         }
 
         /*
-         * Scenario: Notes panel collapses to button when space is insufficient
+         * Scenario: Notes button collapses when space is extremely restricted
          *   Given the header bar is visible
-         *   When the window width is reduced so that required space exceeds available width
-         *   Then the Notes panel should be collapsed
-         *   And the Collapsed Notes Button should be visible
+         *   When the window width is reduced to be extremely narrow
+         *   Then the Notes Button should be hidden (collapsed)
          *   
-         * Scenario: Notes panel is restored when space is ample
-         *   Given the Collapsed Notes Button is visible
-         *   When the window width is increased to be ample
-         *   Then the Notes panel should be visible
-         *   And the Collapsed Notes Button should be collapsed
+         * Scenario: Notes button is restored when space is sufficient
+         *   Given the Notes Button is hidden
+         *   When the window width is restored to be wide
+         *   Then the Notes Button should be visible
          */
         [Fact]
-        public void UI_Scenario_NotesCollapseAndRestoreOnResize()
+        public void UI_Scenario_NotesButtonCollapseAndRestoreOnResize()
         {
             if (!Environment.UserInteractive || Environment.GetEnvironmentVariable("GITHUB_ACTIONS") != null || Environment.GetEnvironmentVariable("SKIP_UI_TESTS") == "true")
             {
@@ -264,29 +262,24 @@ namespace DesktopHeader.Tests
                 System.Threading.Thread.Sleep(500);
 
                 // Find the elements
-                var notesContainer = window.FindFirstDescendant(cf => cf.ByAutomationId("NotesContainer"));
-                var collapsedButton = window.FindFirstDescendant(cf => cf.ByAutomationId("CollapsedNotesButton"));
+                var notesButton = window.FindFirstDescendant(cf => cf.ByAutomationId("NotesButton"));
 
-                Assert.NotNull(notesContainer);
-                Assert.NotNull(collapsedButton);
+                Assert.NotNull(notesButton);
 
-                // 1. Initially, window is wide (e.g. screenWidth). It should have ample space.
-                // Verify NotesContainer is visible (i.e. not offscreen/collapsed) and collapsedButton is collapsed.
-                Assert.False(notesContainer.IsOffscreen, "Notes panel should be visible when space is ample.");
-                Assert.True(collapsedButton.IsOffscreen, "Collapsed Notes Button should not be visible when space is ample.");
+                // 1. Initially, window is wide (e.g. screenWidth). Notes button should be visible.
+                Assert.False(notesButton.IsOffscreen, "Notes button should be visible when space is ample.");
 
-                // 2. Reduce window width to force collapsing
+                // 2. Reduce window width to force collapsing (e.g., 80px)
                 var transformPattern = window.Patterns.Transform.PatternOrDefault;
                 if (transformPattern != null)
                 {
                     var currentHeight = window.Properties.BoundingRectangle.Value.Height;
-                    transformPattern.Resize(400, currentHeight);
+                    transformPattern.Resize(80, currentHeight);
                 }
                 System.Threading.Thread.Sleep(500); // Wait for SizeChanged layout pass
 
-                // Verify notesContainer is now collapsed/offscreen, and collapsedButton is visible.
-                Assert.True(notesContainer.IsOffscreen, "Notes panel should collapse when width is restricted.");
-                Assert.False(collapsedButton.IsOffscreen, "Collapsed Notes Button should become visible when width is restricted.");
+                // Verify notesButton is now collapsed/offscreen.
+                Assert.True(notesButton.IsOffscreen, "Notes button should hide when width is extremely restricted.");
 
                 // 3. Restore window width
                 if (transformPattern != null)
@@ -297,8 +290,7 @@ namespace DesktopHeader.Tests
                 System.Threading.Thread.Sleep(500); // Wait for SizeChanged layout pass
 
                 // Verify restored state
-                Assert.False(notesContainer.IsOffscreen, "Notes panel should restore when width is expanded.");
-                Assert.True(collapsedButton.IsOffscreen, "Collapsed Notes Button should hide when width is expanded.");
+                Assert.False(notesButton.IsOffscreen, "Notes button should restore when width is expanded.");
             }
             finally
             {
