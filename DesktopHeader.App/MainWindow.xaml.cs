@@ -153,11 +153,42 @@ namespace DesktopHeader.App
                 restoreItem.Click += (s, e) => {
                     RestoreDesktops();
                 };
+
+                // "Open Dev Environment" item
+                var devEnvItem = new ToolStripMenuItem("Open Dev Environment");
+                devEnvItem.Click += (s, e) => {
+                    try
+                    {
+                        Desktop currentActive = Desktop.Current;
+                        int currentActiveIndex = Desktop.FromDesktop(currentActive);
+                        string activeName = Desktop.DesktopNameFromIndex(currentActiveIndex);
+                        SpawnDevEnvironment(activeName);
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogError("Failed to spawn development environment from tray click.", ex);
+                        MessageBox.Show($"Failed to spawn dev environment: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    }
+                };
                 
                 // Dynamically populate sub-menu on open to show what desktops will be restored
                 contextMenu.Opening += (s, e) => {
                     try
                     {
+                        // Update Dev Environment label dynamically based on active desktop
+                        try
+                        {
+                            Desktop currentActive = Desktop.Current;
+                            int currentActiveIndex = Desktop.FromDesktop(currentActive);
+                            string activeName = Desktop.DesktopNameFromIndex(currentActiveIndex);
+                            devEnvItem.Text = $"Open Dev Environment (c:\\dev\\{SanitizeFolderName(activeName)})";
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.LogWarning($"Failed to dynamically update dev environment tray menu item: {ex.Message}");
+                            devEnvItem.Text = "Open Dev Environment";
+                        }
+
                         restoreItem.DropDownItems.Clear();
                         
                         string backupPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "desktops_backup.txt");
@@ -205,6 +236,7 @@ namespace DesktopHeader.App
                 };
 
                 contextMenu.Items.Add(restoreItem);
+                contextMenu.Items.Add(devEnvItem);
 
                 contextMenu.Items.Add(new ToolStripSeparator());
 
@@ -756,6 +788,104 @@ namespace DesktopHeader.App
             // Auto-save on collapse
             SaveCurrentDesktopNote();
             Logger.LogInfo("Collapsed Notes panel.");
+        }
+
+        #endregion
+
+        #region Dev Environment Launcher
+
+        public static string SanitizeFolderName(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return "Default";
+            var invalidChars = Path.GetInvalidFileNameChars();
+            var sanitized = new string(name.Where(c => !invalidChars.Contains(c)).ToArray()).Trim();
+            return string.IsNullOrEmpty(sanitized) ? "Default" : sanitized;
+        }
+
+        private void SpawnDevEnvironment(string desktopName)
+        {
+            string sanitized = SanitizeFolderName(desktopName);
+            string folderPath = Path.Combine(@"C:\dev", sanitized);
+
+            try
+            {
+                Logger.LogInfo($"Preparing dev environment in: {folderPath}");
+                if (!Directory.Exists(folderPath))
+                {
+                    Logger.LogInfo($"Directory does not exist. Creating directory: {folderPath}");
+                    Directory.CreateDirectory(folderPath);
+                }
+
+                // 1. Spawn PowerShell Terminal
+                try
+                {
+                    Logger.LogInfo("Spawning PowerShell terminal...");
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = "powershell.exe",
+                        WorkingDirectory = folderPath,
+                        UseShellExecute = true
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError("Failed to spawn PowerShell terminal.", ex);
+                }
+
+                // 2. Spawn VS Code
+                try
+                {
+                    Logger.LogInfo("Spawning VS Code...");
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = "code",
+                        Arguments = $"\"{folderPath}\"",
+                        UseShellExecute = true,
+                        CreateNoWindow = true
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogWarning($"Failed to spawn VS Code (is VS Code installed?): {ex.Message}");
+                }
+
+                // 3. Spawn GitExtensions
+                try
+                {
+                    Logger.LogInfo("Spawning GitExtensions...");
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = "gitex",
+                        Arguments = $"\"{folderPath}\"",
+                        UseShellExecute = true
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogWarning($"Failed to spawn GitExtensions (is GitExtensions installed?): {ex.Message}");
+                }
+
+                // 4. Spawn File Explorer
+                try
+                {
+                    Logger.LogInfo("Spawning File Explorer...");
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = "explorer.exe",
+                        Arguments = $"\"{folderPath}\"",
+                        UseShellExecute = true
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError("Failed to spawn File Explorer.", ex);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError($"Failed to prepare or spawn dev environment for '{desktopName}':", ex);
+                throw;
+            }
         }
 
         #endregion

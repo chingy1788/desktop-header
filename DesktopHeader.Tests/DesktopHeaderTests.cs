@@ -76,6 +76,24 @@ namespace DesktopHeader.Tests
             }
         }
 
+        [Theory]
+        [InlineData("Work", "Work")]
+        [InlineData("Home & Projects", "Home & Projects")]
+        [InlineData("Desktop/1", "Desktop1")]
+        [InlineData("A\\B:C*D?E\"F<G>H|I", "ABCDEFGHI")]
+        [InlineData("", "Default")]
+        [InlineData(null, "Default")]
+        [InlineData("   ", "Default")]
+        [InlineData("  Leading And Trailing  ", "Leading And Trailing")]
+        public void TestSanitizeFolderName(string? input, string expected)
+        {
+            // Act
+            string result = DesktopHeader.App.MainWindow.SanitizeFolderName(input!);
+
+            // Assert
+            Assert.Equal(expected, result);
+        }
+
         #endregion
 
         #region 2. Gherkin UI Automation Tests (FlaUI)
