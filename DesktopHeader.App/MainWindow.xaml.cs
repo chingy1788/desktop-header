@@ -154,22 +154,91 @@ namespace DesktopHeader.App
                     RestoreDesktops();
                 };
 
-                // "Open Dev Environment" item
+                // "Open Dev Environment" item with sub-menu options to open each tool
                 var devEnvItem = new ToolStripMenuItem("Open Dev Environment");
-                devEnvItem.Click += (s, e) => {
+                
+                var openAllItem = new ToolStripMenuItem("Open All Tools");
+                openAllItem.Click += (s, e) => {
                     try
                     {
                         Desktop currentActive = Desktop.Current;
                         int currentActiveIndex = Desktop.FromDesktop(currentActive);
                         string activeName = Desktop.DesktopNameFromIndex(currentActiveIndex);
-                        SpawnDevEnvironment(activeName);
+                        SpawnDevTool(activeName, "All");
                     }
                     catch (Exception ex)
                     {
-                        Logger.LogError("Failed to spawn development environment from tray click.", ex);
+                        Logger.LogError("Failed to spawn all development tools from tray click.", ex);
                         MessageBox.Show($"Failed to spawn dev environment: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
                     }
                 };
+
+                var openPowerShellItem = new ToolStripMenuItem("Open PowerShell");
+                openPowerShellItem.Click += (s, e) => {
+                    try
+                    {
+                        Desktop currentActive = Desktop.Current;
+                        int currentActiveIndex = Desktop.FromDesktop(currentActive);
+                        string activeName = Desktop.DesktopNameFromIndex(currentActiveIndex);
+                        SpawnDevTool(activeName, "PowerShell");
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogError("Failed to spawn PowerShell from tray click.", ex);
+                    }
+                };
+
+                var openVSCodeItem = new ToolStripMenuItem("Open VS Code");
+                openVSCodeItem.Click += (s, e) => {
+                    try
+                    {
+                        Desktop currentActive = Desktop.Current;
+                        int currentActiveIndex = Desktop.FromDesktop(currentActive);
+                        string activeName = Desktop.DesktopNameFromIndex(currentActiveIndex);
+                        SpawnDevTool(activeName, "VSCode");
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogError("Failed to spawn VS Code from tray click.", ex);
+                    }
+                };
+
+                var openGitExItem = new ToolStripMenuItem("Open GitExtensions");
+                openGitExItem.Click += (s, e) => {
+                    try
+                    {
+                        Desktop currentActive = Desktop.Current;
+                        int currentActiveIndex = Desktop.FromDesktop(currentActive);
+                        string activeName = Desktop.DesktopNameFromIndex(currentActiveIndex);
+                        SpawnDevTool(activeName, "GitExtensions");
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogError("Failed to spawn GitExtensions from tray click.", ex);
+                    }
+                };
+
+                var openExplorerItem = new ToolStripMenuItem("Open File Explorer");
+                openExplorerItem.Click += (s, e) => {
+                    try
+                    {
+                        Desktop currentActive = Desktop.Current;
+                        int currentActiveIndex = Desktop.FromDesktop(currentActive);
+                        string activeName = Desktop.DesktopNameFromIndex(currentActiveIndex);
+                        SpawnDevTool(activeName, "Explorer");
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogError("Failed to spawn File Explorer from tray click.", ex);
+                    }
+                };
+
+                devEnvItem.DropDownItems.Add(openAllItem);
+                devEnvItem.DropDownItems.Add(new ToolStripSeparator());
+                devEnvItem.DropDownItems.Add(openPowerShellItem);
+                devEnvItem.DropDownItems.Add(openVSCodeItem);
+                devEnvItem.DropDownItems.Add(openGitExItem);
+                devEnvItem.DropDownItems.Add(openExplorerItem);
                 
                 // Dynamically populate sub-menu on open to show what desktops will be restored
                 contextMenu.Opening += (s, e) => {
@@ -802,14 +871,14 @@ namespace DesktopHeader.App
             return string.IsNullOrEmpty(sanitized) ? "Default" : sanitized;
         }
 
-        private void SpawnDevEnvironment(string desktopName)
+        private void SpawnDevTool(string desktopName, string toolName)
         {
             string sanitized = SanitizeFolderName(desktopName);
             string folderPath = Path.Combine(@"C:\dev", sanitized);
 
             try
             {
-                Logger.LogInfo($"Preparing dev environment in: {folderPath}");
+                Logger.LogInfo($"Preparing dev tool '{toolName}' in: {folderPath}");
                 if (!Directory.Exists(folderPath))
                 {
                     Logger.LogInfo($"Directory does not exist. Creating directory: {folderPath}");
@@ -817,73 +886,85 @@ namespace DesktopHeader.App
                 }
 
                 // 1. Spawn PowerShell Terminal
-                try
+                if (toolName == "PowerShell" || toolName == "All")
                 {
-                    Logger.LogInfo("Spawning PowerShell terminal...");
-                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    try
                     {
-                        FileName = "powershell.exe",
-                        WorkingDirectory = folderPath,
-                        UseShellExecute = true
-                    });
-                }
-                catch (Exception ex)
-                {
-                    Logger.LogError("Failed to spawn PowerShell terminal.", ex);
+                        Logger.LogInfo("Spawning PowerShell terminal...");
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = "powershell.exe",
+                            WorkingDirectory = folderPath,
+                            UseShellExecute = true
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogError("Failed to spawn PowerShell terminal.", ex);
+                    }
                 }
 
                 // 2. Spawn VS Code
-                try
+                if (toolName == "VSCode" || toolName == "All")
                 {
-                    Logger.LogInfo("Spawning VS Code...");
-                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    try
                     {
-                        FileName = "code",
-                        Arguments = $"\"{folderPath}\"",
-                        UseShellExecute = true,
-                        CreateNoWindow = true
-                    });
-                }
-                catch (Exception ex)
-                {
-                    Logger.LogWarning($"Failed to spawn VS Code (is VS Code installed?): {ex.Message}");
+                        Logger.LogInfo("Spawning VS Code...");
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = "code",
+                            Arguments = $"\"{folderPath}\"",
+                            UseShellExecute = true,
+                            CreateNoWindow = true
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogWarning($"Failed to spawn VS Code (is VS Code installed?): {ex.Message}");
+                    }
                 }
 
                 // 3. Spawn GitExtensions
-                try
+                if (toolName == "GitExtensions" || toolName == "All")
                 {
-                    Logger.LogInfo("Spawning GitExtensions...");
-                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    try
                     {
-                        FileName = "gitex",
-                        Arguments = $"\"{folderPath}\"",
-                        UseShellExecute = true
-                    });
-                }
-                catch (Exception ex)
-                {
-                    Logger.LogWarning($"Failed to spawn GitExtensions (is GitExtensions installed?): {ex.Message}");
+                        Logger.LogInfo("Spawning GitExtensions...");
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = "gitex",
+                            Arguments = $"\"{folderPath}\"",
+                            UseShellExecute = true
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogWarning($"Failed to spawn GitExtensions (is GitExtensions installed?): {ex.Message}");
+                    }
                 }
 
                 // 4. Spawn File Explorer
-                try
+                if (toolName == "Explorer" || toolName == "All")
                 {
-                    Logger.LogInfo("Spawning File Explorer...");
-                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    try
                     {
-                        FileName = "explorer.exe",
-                        Arguments = $"\"{folderPath}\"",
-                        UseShellExecute = true
-                    });
-                }
-                catch (Exception ex)
-                {
-                    Logger.LogError("Failed to spawn File Explorer.", ex);
+                        Logger.LogInfo("Spawning File Explorer...");
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = "explorer.exe",
+                            Arguments = $"\"{folderPath}\"",
+                            UseShellExecute = true
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogError("Failed to spawn File Explorer.", ex);
+                    }
                 }
             }
             catch (Exception ex)
             {
-                Logger.LogError($"Failed to prepare or spawn dev environment for '{desktopName}':", ex);
+                Logger.LogError($"Failed to prepare or spawn dev tool '{toolName}' for '{desktopName}':", ex);
                 throw;
             }
         }
