@@ -34,6 +34,21 @@ namespace DesktopHeader.App
         private NotifyIcon? _notifyIcon;
         private const string RegistryRunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
         private const string AppRegistryName = "DesktopHeaderOverlay";
+        private bool _showNotesPreview = true;
+        public bool ShowNotesPreview
+        {
+            get => _showNotesPreview;
+            set
+            {
+                if (_showNotesPreview != value)
+                {
+                    _showNotesPreview = value;
+                    OnPropertyChanged(nameof(ShowNotesPreview));
+                    SaveSettings();
+                    UpdateNotesVisibility();
+                }
+            }
+        }
 
         [System.Runtime.InteropServices.DllImport("user32.dll")]
         private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
@@ -50,6 +65,9 @@ namespace DesktopHeader.App
             DataContext = this;
 
             Logger.LogInfo("Desktop Header Overlay initializing...");
+
+            // Load saved settings
+            LoadSettings();
 
             // Initialize DispatcherTimer for highly lightweight 250ms polling
             _timer = new DispatcherTimer
@@ -150,6 +168,15 @@ namespace DesktopHeader.App
                     SetLaunchAtStartup(startupItem.Checked);
                 };
                 contextMenu.Items.Add(startupItem);
+
+                // "Show Notes Preview" item
+                var previewItem = new ToolStripMenuItem("Show Notes Preview");
+                previewItem.CheckOnClick = true;
+                previewItem.Checked = ShowNotesPreview;
+                previewItem.Click += (s, e) => {
+                    ShowNotesPreview = previewItem.Checked;
+                };
+                contextMenu.Items.Add(previewItem);
 
                 // "Restore Desktops" item
                 var restoreItem = new ToolStripMenuItem("Restore Desktops");
@@ -746,6 +773,41 @@ namespace DesktopHeader.App
             }
         }
 
+        private void LoadSettings()
+        {
+            try
+            {
+                string settingsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "settings.txt");
+                if (File.Exists(settingsPath))
+                {
+                    string content = File.ReadAllText(settingsPath).Trim();
+                    if (bool.TryParse(content, out bool val))
+                    {
+                        _showNotesPreview = val;
+                        Logger.LogInfo($"Loaded ShowNotesPreview setting: {val}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError("Failed to load settings from file.", ex);
+            }
+        }
+
+        private void SaveSettings()
+        {
+            try
+            {
+                string settingsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "settings.txt");
+                File.WriteAllText(settingsPath, _showNotesPreview.ToString());
+                Logger.LogInfo($"Saved ShowNotesPreview setting: {_showNotesPreview}");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError("Failed to save settings to file.", ex);
+            }
+        }
+
         private string GetNotesDirectory()
         {
             string dir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "notes");
@@ -826,6 +888,44 @@ namespace DesktopHeader.App
             SaveCurrentDesktopNote();
         }
 
+        private void NotesHeader_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            if (EditorRow.Height.Value == 0)
+            {
+                ExpandNotes();
+            }
+            else
+            {
+                CollapseNotes();
+            }
+        }
+
+        private void DoneButton_Click(object sender, RoutedEventArgs e)
+        {
+            CollapseNotes();
+        }
+
+        private void ExpandNotes()
+        {
+            EditorRow.Height = new GridLength(234); // Expand row 1 height to fit TextBox + Done Button
+            ToggleIndicator.Text = "▴";
+            
+            // Focus the text box
+            NotesTextBox.Focus();
+            NotesTextBox.SelectionStart = NotesTextBox.Text?.Length ?? 0;
+            Logger.LogInfo("Expanded standard Notes panel.");
+        }
+
+        private void CollapseNotes()
+        {
+            EditorRow.Height = new GridLength(0); // Collapse row 1
+            ToggleIndicator.Text = "▾";
+            
+            // Auto-save on collapse
+            SaveCurrentDesktopNote();
+            Logger.LogInfo("Collapsed standard Notes panel.");
+        }
+
         private void LayoutRoot_SizeChanged(object sender, SizeChangedEventArgs e)
         {
             UpdateNotesVisibility();
@@ -854,25 +954,69 @@ namespace DesktopHeader.App
                     desktopsWidth = Desktops.Count * 90 + 30;
                 }
 
-                // The standard NotesButton has a fixed width of 46 DIPs.
-                // We add a safety buffer of 20 DIPs to prevent visual overlaps.
-                double requiredWidth = desktopsWidth + 46 + 20;
-
-                if (windowWidth > 0 && requiredWidth > windowWidth)
+                if (ShowNotesPreview)
                 {
-                    if (NotesButton.Visibility != Visibility.Collapsed)
+                    // 1. Expandable first-line preview mode
+                    double requiredWidth = desktopsWidth + 320 + 40; // 320 DIP panel width + 40 DIP buffer
+
+                    if (windowWidth > 0 && requiredWidth > windowWidth)
                     {
-                        Logger.LogInfo($"Space is extremely tight ({requiredWidth}px required vs {windowWidth}px available). Hiding Notes button.");
-                        NotesButton.Visibility = Visibility.Collapsed;
-                        NotesPopup.IsOpen = false;
+                        // Space is tight -> Hide standard panel, show button
+                        if (NotesContainer.Visibility != Visibility.Collapsed)
+                        {
+                            Logger.LogInfo($"Space is tight ({requiredWidth}px required vs {windowWidth}px available). Swapping Notes panel for button.");
+                            NotesContainer.Visibility = Visibility.Collapsed;
+                            NotesButton.Visibility = Visibility.Visible;
+                            
+                            // Close standard text editor and save note
+                            CollapseNotes();
+                        }
+                    }
+                    else
+                    {
+                        // Space is sufficient -> Show standard panel, hide button
+                        if (NotesContainer.Visibility != Visibility.Visible)
+                        {
+                            Logger.LogInfo($"Ample space detected ({requiredWidth}px required vs {windowWidth}px available). Restoring Notes panel.");
+                            NotesContainer.Visibility = Visibility.Visible;
+                            NotesButton.Visibility = Visibility.Collapsed;
+                            
+                            // Close popup if it was open
+                            if (NotesPopup.IsOpen)
+                            {
+                                NotesPopup.IsOpen = false;
+                            }
+                        }
                     }
                 }
                 else
                 {
-                    if (NotesButton.Visibility != Visibility.Visible)
+                    // 2. Button-only mode: standard panel is ALWAYS Collapsed
+                    if (NotesContainer.Visibility != Visibility.Collapsed)
                     {
-                        Logger.LogInfo($"Space is sufficient ({requiredWidth}px required vs {windowWidth}px available). Restoring Notes button.");
-                        NotesButton.Visibility = Visibility.Visible;
+                        NotesContainer.Visibility = Visibility.Collapsed;
+                        CollapseNotes();
+                    }
+
+                    // Button is visible unless space is extremely tight (desktops stretch full width)
+                    double requiredWidth = desktopsWidth + 46 + 20;
+
+                    if (windowWidth > 0 && requiredWidth > windowWidth)
+                    {
+                        if (NotesButton.Visibility != Visibility.Collapsed)
+                        {
+                            Logger.LogInfo($"Space is extremely restricted ({requiredWidth}px required vs {windowWidth}px available). Hiding Notes button.");
+                            NotesButton.Visibility = Visibility.Collapsed;
+                            NotesPopup.IsOpen = false;
+                        }
+                    }
+                    else
+                    {
+                        if (NotesButton.Visibility != Visibility.Visible)
+                        {
+                            Logger.LogInfo("Restoring Notes button in button-only mode.");
+                            NotesButton.Visibility = Visibility.Visible;
+                        }
                     }
                 }
             }
