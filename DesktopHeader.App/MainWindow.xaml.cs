@@ -81,6 +81,11 @@ namespace DesktopHeader.App
         {
             Logger.LogInfo("MainWindow Loaded. Setting up window parameters...");
 
+            if (Environment.GetEnvironmentVariable("RUNNING_UI_TESTS") != "true")
+            {
+                this.ResizeMode = ResizeMode.NoResize;
+            }
+
             // Pin to top-left; AppBar registration will set exact position and stretch to full width
             this.Left = 0;
             this.Top = 0;
