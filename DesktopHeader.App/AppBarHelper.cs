@@ -179,8 +179,8 @@ namespace DesktopHeader.App
                     try
                     {
                         window.Top = abd.rc.top;
-                        window.Left = 16;
-                        window.Width = screenWidth - 32;
+                        window.Left = 0;
+                        window.Width = screenWidth;
                     }
                     catch (Exception dispEx)
                     {
