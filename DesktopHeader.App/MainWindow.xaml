@@ -432,10 +432,25 @@
                              FontFamily="Segoe UI Variable Text, Inter, Segoe UI, Arial"
                              KeyDown="RenameTextBox_KeyDown"/>
                              
-                    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
-                        <Button Content="Cancel" Click="RenameCancel_Click" Style="{StaticResource HeaderButtonStyle}" Margin="0,0,4,0"/>
-                        <Button Content="Save" Click="RenameSave_Click" Style="{StaticResource HeaderButtonStyle}"/>
-                    </StackPanel>
+                    <Grid Grid.Row="2" Margin="0,8,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        
+                        <!-- Delete Button (Left-aligned, red) -->
+                        <Button Grid.Column="0" 
+                                Content="Delete" 
+                                Click="RenameDelete_Click" 
+                                Foreground="#FF453A"
+                                Style="{StaticResource HeaderButtonStyle}"/>
+                        
+                        <!-- Cancel & Save Buttons (Right-aligned) -->
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button Content="Cancel" Click="RenameCancel_Click" Style="{StaticResource HeaderButtonStyle}" Margin="0,0,4,0"/>
+                            <Button Content="Save" Click="RenameSave_Click" Style="{StaticResource HeaderButtonStyle}"/>
+                        </StackPanel>
+                    </Grid>
                 </Grid>
             </Border>
         </Popup>

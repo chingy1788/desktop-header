@@ -1002,6 +1002,48 @@ namespace DesktopHeader.App
             RenamePopup.IsOpen = false;
         }
 
+        private void RenameDelete_Click(object sender, RoutedEventArgs e)
+        {
+            if (_desktopItemBeingRenamed != null)
+            {
+                // Close the popup first
+                RenamePopup.IsOpen = false;
+
+                int currentCount = Desktop.Count;
+                if (currentCount <= 1)
+                {
+                    MessageBox.Show("You cannot delete the only remaining virtual desktop.", "Information", MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
+
+                string desktopName = _desktopItemBeingRenamed.Name;
+                var result = MessageBox.Show(
+                    $"Are you sure you want to delete the virtual desktop '{desktopName}'?{Environment.NewLine}Any open windows on this desktop will be moved to an adjacent workspace.",
+                    "Confirm Delete",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Warning,
+                    MessageBoxResult.No);
+
+                if (result == MessageBoxResult.Yes)
+                {
+                    try
+                    {
+                        Logger.LogInfo($"Deleting virtual desktop index {_desktopItemBeingRenamed.Index} ('{desktopName}')...");
+                        var d = Desktop.FromIndex(_desktopItemBeingRenamed.Index);
+                        d.Remove();
+                        
+                        // Immediately refresh UI list
+                        UpdateDesktopsList();
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogError($"Failed to delete virtual desktop index {_desktopItemBeingRenamed.Index}.", ex);
+                        MessageBox.Show($"Failed to delete virtual desktop: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    }
+                }
+            }
+        }
+
         private void SaveRename()
         {
             if (_desktopItemBeingRenamed != null)
