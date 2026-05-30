@@ -243,7 +243,6 @@ namespace VirtualDesktop
 		int GetAdjacentDesktop(IVirtualDesktop10 from, int direction, out IVirtualDesktop10 desktop);
 		void SwitchDesktop(IVirtualDesktop10 desktop);
 		IVirtualDesktop10 CreateDesktop();
-		void MoveDesktop(IVirtualDesktop10 desktop, int nIndex);
 		void RemoveDesktop(IVirtualDesktop10 desktop, IVirtualDesktop10 fallback);
 		IVirtualDesktop10 FindDesktop(ref Guid desktopid);
 	}
