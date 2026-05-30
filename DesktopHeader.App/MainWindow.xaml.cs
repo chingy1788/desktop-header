@@ -910,6 +910,37 @@ namespace DesktopHeader.App
             CollapseNotes();
         }
 
+        private void DevEnvButton_Click(object sender, RoutedEventArgs e)
+        {
+            DevEnvPopup.IsOpen = !DevEnvPopup.IsOpen;
+        }
+
+        private void DevTool_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var button = sender as Button;
+                if (button != null)
+                {
+                    string toolName = button.CommandParameter as string ?? "All";
+                    Desktop currentActive = Desktop.Current;
+                    int currentActiveIndex = Desktop.FromDesktop(currentActive);
+                    string activeName = Desktop.DesktopNameFromIndex(currentActiveIndex);
+                    
+                    SpawnDevTool(activeName, toolName);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError("Failed to spawn dev tool from dropdown click.", ex);
+                MessageBox.Show($"Failed to spawn dev environment: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                DevEnvPopup.IsOpen = false;
+            }
+        }
+
         private void ExpandNotes()
         {
             EditorRow.Height = new GridLength(234); // Expand row 1 height to fit TextBox + Done Button
