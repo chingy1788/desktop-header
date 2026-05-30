@@ -32,6 +32,7 @@ namespace DesktopHeader.App
         private IntPtr _windowHandle = IntPtr.Zero;
         private int _pinRetryCount = 0;
         private NotifyIcon? _notifyIcon;
+        private DesktopItem? _desktopItemBeingRenamed;
         private const string RegistryRunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
         private const string AppRegistryName = "DesktopHeaderOverlay";
         private bool _showNotesPreview = true;
@@ -939,6 +940,93 @@ namespace DesktopHeader.App
             {
                 DevEnvPopup.IsOpen = false;
             }
+        }
+
+        private void AddDesktopButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                Logger.LogInfo("Creating new virtual desktop...");
+                Desktop.Create();
+                UpdateDesktopsList();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError("Failed to create virtual desktop.", ex);
+                MessageBox.Show($"Failed to create virtual desktop: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void DesktopButton_RightClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            var button = sender as Button;
+            if (button != null)
+            {
+                var item = button.DataContext as DesktopItem;
+                if (item != null)
+                {
+                    _desktopItemBeingRenamed = item;
+                    RenameTextBox.Text = item.Name;
+                    
+                    RenamePopup.PlacementTarget = button;
+                    RenamePopup.IsOpen = true;
+                    
+                    // Focus and select all text in the text box
+                    RenameTextBox.Focus();
+                    RenameTextBox.SelectAll();
+                }
+            }
+        }
+
+        private void RenameSave_Click(object sender, RoutedEventArgs e)
+        {
+            SaveRename();
+        }
+
+        private void RenameTextBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+        {
+            if (e.Key == System.Windows.Input.Key.Enter)
+            {
+                SaveRename();
+                e.Handled = true;
+            }
+            else if (e.Key == System.Windows.Input.Key.Escape)
+            {
+                RenamePopup.IsOpen = false;
+                e.Handled = true;
+            }
+        }
+
+        private void RenameCancel_Click(object sender, RoutedEventArgs e)
+        {
+            RenamePopup.IsOpen = false;
+        }
+
+        private void SaveRename()
+        {
+            if (_desktopItemBeingRenamed != null)
+            {
+                string newName = RenameTextBox.Text?.Trim() ?? "";
+                if (!string.IsNullOrEmpty(newName))
+                {
+                    try
+                    {
+                        Logger.LogInfo($"Renaming desktop index {_desktopItemBeingRenamed.Index} to '{newName}'");
+                        
+                        var d = Desktop.FromIndex(_desktopItemBeingRenamed.Index);
+                        d.SetName(newName);
+                        
+                        // Immediately update local item and UI
+                        _desktopItemBeingRenamed.Name = newName;
+                        UpdateDesktopsList();
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogError($"Failed to rename desktop index {_desktopItemBeingRenamed.Index}.", ex);
+                    }
+                }
+            }
+            RenamePopup.IsOpen = false;
         }
 
         private void ExpandNotes()
