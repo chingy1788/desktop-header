@@ -26,6 +26,9 @@ namespace DesktopHeader.App
             PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(propertyName));
         }
         public ObservableCollection<DesktopItem> Desktops { get; } = new();
+        public System.Windows.Forms.Screen TargetScreen { get; set; } = System.Windows.Forms.Screen.PrimaryScreen ?? throw new InvalidOperationException("No primary screen detected.");
+        public bool IsPrimary { get; set; } = true;
+        private AppBarHelper? _appBarHelper;
         private readonly DispatcherTimer _timer;
         private int _lastActiveIndex = -1;
         private bool _isPinned = false;
@@ -80,19 +83,32 @@ namespace DesktopHeader.App
 
         private void Window_Loaded(object sender, RoutedEventArgs e)
         {
-            Logger.LogInfo("MainWindow Loaded. Setting up window parameters...");
+            Logger.LogInfo($"MainWindow Loaded on screen {(TargetScreen != null ? TargetScreen.DeviceName : "Primary")}. IsPrimary={IsPrimary}");
 
             if (Environment.GetEnvironmentVariable("RUNNING_UI_TESTS") != "true")
             {
                 this.ResizeMode = ResizeMode.NoResize;
             }
 
-            // Pin to top-left; AppBar registration will set exact position and stretch to full width
-            this.Left = 0;
-            this.Top = 0;
+            // Pin to target screen's bounds initially; AppBar registration will set exact position
+            if (TargetScreen != null)
+            {
+                var dpi = VisualTreeHelper.GetDpi(this);
+                this.Left = TargetScreen.Bounds.X / dpi.DpiScaleX;
+                this.Top = TargetScreen.Bounds.Y / dpi.DpiScaleY;
+                this.Width = TargetScreen.Bounds.Width / dpi.DpiScaleX;
+            }
+            else
+            {
+                this.Left = 0;
+                this.Top = 0;
+            }
 
-            // Initial load of desktops
-            UpdateDesktopsList();
+            if (IsPrimary)
+            {
+                // Initial load of desktops
+                UpdateDesktopsList();
+            }
 
             // Get window handle and attempt initial pinning
             var helper = new WindowInteropHelper(this);
@@ -112,12 +128,40 @@ namespace DesktopHeader.App
 
             TryPinWindow();
 
-            // Initialize system tray icon
-            InitializeTrayIcon();
+            if (IsPrimary)
+            {
+                // Initialize system tray icon
+                InitializeTrayIcon();
 
-            // Start the polling timer
-            _timer.Start();
-            Logger.LogInfo($"Polling timer started. Initially loaded {Desktops.Count} desktops.");
+                // Start the polling timer
+                _timer.Start();
+                Logger.LogInfo($"Polling timer started. Initially loaded {Desktops.Count} desktops.");
+
+                // Spawn secondary windows for other screens
+                try
+                {
+                    var screens = System.Windows.Forms.Screen.AllScreens;
+                    Logger.LogInfo($"Multi-monitor detection: found {screens.Length} screens.");
+                    foreach (var s in screens)
+                    {
+                        if (!s.Primary)
+                        {
+                            Logger.LogInfo($"Spawning secondary overlay on screen: {s.DeviceName}");
+                            var secondaryWin = new MainWindow
+                            {
+                                IsPrimary = false,
+                                TargetScreen = s
+                            };
+                            secondaryWin.Show();
+                            secondaryWin.SyncFromPrimary(this);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError("Failed to initialize multi-monitor overlays.", ex);
+                }
+            }
 
             // Run initial responsive layout check after window loaded
             Dispatcher.BeginInvoke(new Action(() => UpdateNotesVisibility()), DispatcherPriority.Background);
@@ -133,7 +177,8 @@ namespace DesktopHeader.App
             // Register as Windows AppBar — reserves exact header height so all windows dock below
             try
             {
-                AppBarHelper.RegisterAppBar(this, heightPixels);
+                _appBarHelper = new AppBarHelper(TargetScreen);
+                _appBarHelper.RegisterAppBar(this, heightPixels);
             }
             catch (Exception ex)
             {
@@ -209,18 +254,18 @@ namespace DesktopHeader.App
                     }
                 };
 
-                var openPowerShellItem = new ToolStripMenuItem("Open PowerShell");
-                openPowerShellItem.Click += (s, e) => {
+                var openTerminalItem = new ToolStripMenuItem("Open Windows Terminal");
+                openTerminalItem.Click += (s, e) => {
                     try
                     {
                         Desktop currentActive = Desktop.Current;
                         int currentActiveIndex = Desktop.FromDesktop(currentActive);
                         string activeName = Desktop.DesktopNameFromIndex(currentActiveIndex);
-                        SpawnDevTool(activeName, "PowerShell");
+                        SpawnDevTool(activeName, "Terminal");
                     }
                     catch (Exception ex)
                     {
-                        Logger.LogError("Failed to spawn PowerShell from tray click.", ex);
+                        Logger.LogError("Failed to spawn Windows Terminal from tray click.", ex);
                     }
                 };
 
@@ -271,7 +316,7 @@ namespace DesktopHeader.App
 
                 devEnvItem.DropDownItems.Add(openAllItem);
                 devEnvItem.DropDownItems.Add(new ToolStripSeparator());
-                devEnvItem.DropDownItems.Add(openPowerShellItem);
+                devEnvItem.DropDownItems.Add(openTerminalItem);
                 devEnvItem.DropDownItems.Add(openVSCodeItem);
                 devEnvItem.DropDownItems.Add(openGitExItem);
                 devEnvItem.DropDownItems.Add(openExplorerItem);
@@ -345,6 +390,27 @@ namespace DesktopHeader.App
 
                 contextMenu.Items.Add(new ToolStripSeparator());
 
+                // "Restart Overlay" item
+                var restartItem = new ToolStripMenuItem("Restart Overlay");
+                restartItem.Click += (s, e) => {
+                    Logger.LogInfo("Restart selected from System Tray. Restarting application...");
+                    try
+                    {
+                        string? processPath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName;
+                        if (processPath != null)
+                        {
+                            System.Diagnostics.Process.Start(processPath);
+                            System.Windows.Application.Current.Shutdown();
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogError("Failed to restart application.", ex);
+                        MessageBox.Show($"Failed to restart overlay:\n{ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    }
+                };
+                contextMenu.Items.Add(restartItem);
+
                 // "Exit Overlay" item
                 var exitItem = new ToolStripMenuItem("Exit Overlay");
                 exitItem.Click += (s, e) => {
@@ -382,7 +448,7 @@ namespace DesktopHeader.App
                 int heightPixels = (int)Math.Ceiling(height * dpiScale.DpiScaleY);
                 
                 // AppBarHelper.SizeAppBar will re-apply the bounds
-                AppBarHelper.SizeAppBar(this, heightPixels);
+                _appBarHelper?.SizeAppBar(this, heightPixels);
             }
             catch (Exception ex)
             {
@@ -508,6 +574,19 @@ namespace DesktopHeader.App
 
         private void UpdateDesktopsList()
         {
+            if (!IsPrimary)
+            {
+                // Find primary window and ask it to update and sync
+                foreach (Window win in System.Windows.Application.Current.Windows)
+                {
+                    if (win is MainWindow mainWin && mainWin.IsPrimary)
+                    {
+                        mainWin.UpdateDesktopsList();
+                        return;
+                    }
+                }
+            }
+
             try
             {
                 int count = Desktop.Count;
@@ -552,7 +631,6 @@ namespace DesktopHeader.App
                 else
                 {
                     // Otherwise, efficiently update properties individually to avoid flickering
-                    bool activeIndexChanged = false;
                     bool nameChanged = false;
                     for (int i = 0; i < count; i++)
                     {
@@ -569,7 +647,6 @@ namespace DesktopHeader.App
                         if (Desktops[i].IsActive != isCurrentActive)
                         {
                             Desktops[i].IsActive = isCurrentActive;
-                            activeIndexChanged = true;
                         }
                     }
 
@@ -578,13 +655,17 @@ namespace DesktopHeader.App
                         SaveDesktopsBackup();
                     }
 
-                    if (activeIndexChanged && _lastActiveIndex != currentActiveIndex)
+                    if (_lastActiveIndex != currentActiveIndex)
                     {
                         Logger.LogInfo($"Syncing active index to: {currentActiveIndex}");
                         _lastActiveIndex = currentActiveIndex;
                     }
                 }
                 UpdateNotesVisibility();
+                if (IsPrimary)
+                {
+                    SyncSecondaryWindows();
+                }
             }
             catch (Exception ex)
             {
@@ -712,6 +793,18 @@ namespace DesktopHeader.App
                     {
                         d.IsActive = (d.Index == clickedItem.Index);
                     }
+
+                    // Propagate optimistic switch to other windows
+                    foreach (Window win in System.Windows.Application.Current.Windows)
+                    {
+                        if (win is MainWindow mainWin && mainWin != this)
+                        {
+                            foreach (var d in mainWin.Desktops)
+                            {
+                                d.IsActive = (d.Index == clickedItem.Index);
+                            }
+                        }
+                    }
                     
                     targetDesktop.MakeVisible();
                 }
@@ -736,6 +829,7 @@ namespace DesktopHeader.App
                     _currentNoteText = value;
                     OnPropertyChanged(nameof(CurrentNoteText));
                     UpdateNotePreview(value);
+                    SyncNotesToAll(value);
                 }
             }
         }
@@ -816,12 +910,42 @@ namespace DesktopHeader.App
 
         private string GetNotesDirectory()
         {
-            string dir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "notes");
-            if (!Directory.Exists(dir))
+            string userDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            string newDir = Path.Combine(userDir, ".desktop-header", "notes");
+
+            try
             {
-                Directory.CreateDirectory(dir);
+                string oldDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "notes");
+                if (Directory.Exists(oldDir) && string.Compare(oldDir, newDir, StringComparison.OrdinalIgnoreCase) != 0)
+                {
+                    Logger.LogInfo($"Migration: Old notes folder found at '{oldDir}'. Migrating to '{newDir}'...");
+                    if (!Directory.Exists(newDir))
+                    {
+                        Directory.CreateDirectory(newDir);
+                    }
+
+                    foreach (string oldFilePath in Directory.GetFiles(oldDir, "*.txt"))
+                    {
+                        string fileName = Path.GetFileName(oldFilePath);
+                        string newFilePath = Path.Combine(newDir, fileName);
+                        File.Copy(oldFilePath, newFilePath, true);
+                        Logger.LogInfo($"Migration: Copied note file '{fileName}' successfully.");
+                    }
+
+                    Directory.Delete(oldDir, true);
+                    Logger.LogInfo("Migration: Old notes folder deleted successfully.");
+                }
             }
-            return dir;
+            catch (Exception ex)
+            {
+                Logger.LogError("Migration: Error migrating old notes to user directory.", ex);
+            }
+
+            if (!Directory.Exists(newDir))
+            {
+                Directory.CreateDirectory(newDir);
+            }
+            return newDir;
         }
 
         private string GetNoteFilePath(Guid guid)
@@ -859,6 +983,18 @@ namespace DesktopHeader.App
 
         private void SaveCurrentDesktopNote()
         {
+            if (!IsPrimary)
+            {
+                foreach (Window win in System.Windows.Application.Current.Windows)
+                {
+                    if (win is MainWindow mainWin && mainWin.IsPrimary)
+                    {
+                        mainWin.SaveCurrentDesktopNote();
+                        return;
+                    }
+                }
+            }
+
             Guid guid = _currentDesktopGuid;
             if (guid == Guid.Empty) return;
 
@@ -1249,22 +1385,22 @@ namespace DesktopHeader.App
                     Directory.CreateDirectory(folderPath);
                 }
 
-                // 1. Spawn PowerShell Terminal
-                if (toolName == "PowerShell" || toolName == "All")
+                // 1. Spawn Windows Terminal
+                if (toolName == "Terminal" || toolName == "All")
                 {
                     try
                     {
-                        Logger.LogInfo("Spawning PowerShell terminal...");
+                        Logger.LogInfo("Spawning Windows Terminal...");
                         System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
                         {
-                            FileName = "powershell.exe",
-                            WorkingDirectory = folderPath,
+                            FileName = "wt.exe",
+                            Arguments = $"-d \"{folderPath}\"",
                             UseShellExecute = true
                         });
                     }
                     catch (Exception ex)
                     {
-                        Logger.LogError("Failed to spawn PowerShell terminal.", ex);
+                        Logger.LogError("Failed to spawn Windows Terminal.", ex);
                     }
                 }
 
@@ -1330,6 +1466,88 @@ namespace DesktopHeader.App
             {
                 Logger.LogError($"Failed to prepare or spawn dev tool '{toolName}' for '{desktopName}':", ex);
                 throw;
+            }
+        }
+
+        #endregion
+
+        #region Multi-Monitor Synchronization
+
+        private void SyncNotesToAll(string text)
+        {
+            foreach (Window win in System.Windows.Application.Current.Windows)
+            {
+                if (win is MainWindow mainWin && mainWin != this)
+                {
+                    if (mainWin._currentNoteText != text)
+                    {
+                        mainWin._currentNoteText = text;
+                        mainWin.OnPropertyChanged(nameof(CurrentNoteText));
+                        mainWin.UpdateNotePreview(text);
+                    }
+                }
+            }
+        }
+
+        private void SyncSecondaryWindows()
+        {
+            foreach (Window win in System.Windows.Application.Current.Windows)
+            {
+                if (win is MainWindow mainWin && !mainWin.IsPrimary)
+                {
+                    mainWin.SyncFromPrimary(this);
+                }
+            }
+        }
+
+        public void SyncFromPrimary(MainWindow primary)
+        {
+            // 1. Sync Desktops list
+            if (this.Desktops.Count != primary.Desktops.Count)
+            {
+                this.Desktops.Clear();
+                foreach (var item in primary.Desktops)
+                {
+                    this.Desktops.Add(new DesktopItem
+                    {
+                        Index = item.Index,
+                        Name = item.Name,
+                        IsActive = item.IsActive
+                    });
+                }
+            }
+            else
+            {
+                for (int i = 0; i < primary.Desktops.Count; i++)
+                {
+                    if (this.Desktops[i].Name != primary.Desktops[i].Name)
+                    {
+                        this.Desktops[i].Name = primary.Desktops[i].Name;
+                    }
+                    if (this.Desktops[i].IsActive != primary.Desktops[i].IsActive)
+                    {
+                        this.Desktops[i].IsActive = primary.Desktops[i].IsActive;
+                    }
+                }
+            }
+
+            this._lastActiveIndex = primary._lastActiveIndex;
+            this._currentDesktopGuid = primary._currentDesktopGuid;
+
+            // 2. Sync Note Text
+            if (this._currentNoteText != primary._currentNoteText)
+            {
+                this._currentNoteText = primary._currentNoteText;
+                OnPropertyChanged(nameof(CurrentNoteText));
+                UpdateNotePreview(primary._currentNoteText);
+            }
+
+            // 3. Sync Notes Preview settings
+            if (this._showNotesPreview != primary._showNotesPreview)
+            {
+                this._showNotesPreview = primary._showNotesPreview;
+                OnPropertyChanged(nameof(ShowNotesPreview));
+                UpdateNotesVisibility();
             }
         }
 

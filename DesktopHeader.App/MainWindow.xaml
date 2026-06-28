@@ -211,7 +211,7 @@
                             <StackPanel>
                                 <Button Content="Open All Tools" Click="DevTool_Click" CommandParameter="All" Style="{StaticResource DropdownItemStyle}"/>
                                 <Separator Background="#1AFFFFFF" Height="1" Margin="4,2,4,2"/>
-                                <Button Content="PowerShell" Click="DevTool_Click" CommandParameter="PowerShell" Style="{StaticResource DropdownItemStyle}"/>
+                                <Button Content="Windows Terminal" Click="DevTool_Click" CommandParameter="Terminal" Style="{StaticResource DropdownItemStyle}"/>
                                 <Button Content="VS Code" Click="DevTool_Click" CommandParameter="VSCode" Style="{StaticResource DropdownItemStyle}"/>
                                 <Button Content="GitExtensions" Click="DevTool_Click" CommandParameter="GitExtensions" Style="{StaticResource DropdownItemStyle}"/>
                                 <Button Content="File Explorer" Click="DevTool_Click" CommandParameter="Explorer" Style="{StaticResource DropdownItemStyle}"/>

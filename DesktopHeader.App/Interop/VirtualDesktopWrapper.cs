@@ -266,31 +266,110 @@ namespace VirtualDesktop
 		Guid GetWindowDesktopId(IntPtr hWnd);
 	}
 
+	internal class SelfHealingDesktopBackend : IDesktopBackend
+	{
+		private readonly Func<IDesktopBackend> _getBackend;
+		private readonly Action _reinitialize;
+
+		public SelfHealingDesktopBackend(Func<IDesktopBackend> getBackend, Action reinitialize)
+		{
+			_getBackend = getBackend;
+			_reinitialize = reinitialize;
+		}
+
+		private T Execute<T>(Func<IDesktopBackend, T> action)
+		{
+			try
+			{
+				return action(_getBackend());
+			}
+			catch (System.Runtime.InteropServices.COMException ex) when (ex.ErrorCode == unchecked((int)0x800706BA))
+			{
+				Logger.LogWarning("Virtual Desktop COM connection stale (RPC Server unavailable: 0x800706BA). Re-initializing backend and retrying...");
+				_reinitialize();
+				return action(_getBackend());
+			}
+		}
+
+		private void Execute(Action<IDesktopBackend> action)
+		{
+			try
+			{
+				action(_getBackend());
+			}
+			catch (System.Runtime.InteropServices.COMException ex) when (ex.ErrorCode == unchecked((int)0x800706BA))
+			{
+				Logger.LogWarning("Virtual Desktop COM connection stale (RPC Server unavailable: 0x800706BA). Re-initializing backend and retrying...");
+				_reinitialize();
+				action(_getBackend());
+			}
+		}
+
+		public int GetCount() => Execute(b => b.GetCount());
+		public Guid GetCurrentDesktopId() => Execute(b => b.GetCurrentDesktopId());
+		public Guid GetDesktopId(int index) => Execute(b => b.GetDesktopId(index));
+		public string GetDesktopName(int index) => Execute(b => b.GetDesktopName(index));
+		public void SwitchToDesktop(int index) => Execute(b => b.SwitchToDesktop(index));
+		public Guid CreateDesktop() => Execute(b => b.CreateDesktop());
+		public void RemoveDesktop(Guid id, Guid fallbackId) => Execute(b => b.RemoveDesktop(id, fallbackId));
+		public void SetDesktopName(Guid id, string name) => Execute(b => b.SetDesktopName(id, name));
+		public int GetDesktopIndex(Guid id) => Execute(b => b.GetDesktopIndex(id));
+		public bool IsWindowPinned(IntPtr hWnd) => Execute(b => b.IsWindowPinned(hWnd));
+		public void PinWindow(IntPtr hWnd) => Execute(b => b.PinWindow(hWnd));
+		public void UnpinWindow(IntPtr hWnd) => Execute(b => b.UnpinWindow(hWnd));
+		public Guid GetWindowDesktopId(IntPtr hWnd) => Execute(b => b.GetWindowDesktopId(hWnd));
+	}
+
 	internal static class DesktopManager
 	{
+		private static IDesktopBackend? _rawBackend;
+		private static readonly object _lock = new object();
 		internal static readonly IDesktopBackend Backend;
 
 		static DesktopManager()
 		{
+			Backend = new SelfHealingDesktopBackend(GetRawBackend, Reinitialize);
+		}
+
+		private static IDesktopBackend GetRawBackend()
+		{
+			lock (_lock)
+			{
+				if (_rawBackend == null)
+				{
+					InitializeRawBackend();
+				}
+				return _rawBackend!;
+			}
+		}
+
+		private static void Reinitialize()
+		{
+			lock (_lock)
+			{
+				_rawBackend = null;
+			}
+		}
+
+		private static void InitializeRawBackend()
+		{
 			try
 			{
-				// Attempt to initialize Windows 11 COM
-				Backend = new Windows11DesktopBackend();
-				Logger.LogInfo("Successfully initialized Windows 11 Virtual Desktop COM backend.");
+				_rawBackend = new Windows11DesktopBackend();
+				Logger.LogInfo("Successfully initialized/restored Windows 11 Virtual Desktop COM backend.");
 			}
 			catch (Exception ex11)
 			{
-				Logger.LogWarning($"Windows 11 Virtual Desktop COM initialization failed: {ex11.Message}. Attempting Windows 10 COM backend...");
+				Logger.LogWarning($"Windows 11 COM initialization failed: {ex11.Message}. Trying Windows 10...");
 				try
 				{
-					// Attempt to initialize Windows 10 COM
-					Backend = new Windows10DesktopBackend();
-					Logger.LogInfo("Successfully initialized Windows 10 Virtual Desktop COM backend.");
+					_rawBackend = new Windows10DesktopBackend();
+					Logger.LogInfo("Successfully initialized/restored Windows 10 Virtual Desktop COM backend.");
 				}
 				catch (Exception ex10)
 				{
-					Logger.LogWarning($"Windows 10 Virtual Desktop COM initialization failed: {ex10.Message}. Falling back to Simulated Desktop backend.");
-					Backend = new SimulatedDesktopBackend();
+					Logger.LogWarning($"Windows 10 COM initialization failed: {ex10.Message}. Falling back to Simulated Backend.");
+					_rawBackend = new SimulatedDesktopBackend();
 				}
 			}
 		}
