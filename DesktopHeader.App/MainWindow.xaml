@@ -111,7 +111,8 @@
                 SizeChanged="MainContainer_SizeChanged">
             
             <Grid Margin="4,2,4,2">
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <!-- Horizontal Desktops Bar (Visible when space is ample) -->
+                <StackPanel x:Name="HorizontalDesktopsPanel" Orientation="Horizontal" VerticalAlignment="Center" Visibility="Visible">
                     <!-- List of Desktops -->
                     <ItemsControl x:Name="DesktopsList" ItemsSource="{Binding Desktops}">
                         <ItemsControl.ItemsPanel>
@@ -165,6 +166,62 @@
                             FontSize="14"
                             VerticalContentAlignment="Center"
                             HorizontalContentAlignment="Center"/>
+                </StackPanel>
+
+                <!-- Collapsed Desktops Dropdown (Visible when space is tight) -->
+                <StackPanel x:Name="CollapsedDesktopsPanel" Orientation="Horizontal" VerticalAlignment="Center" Visibility="Collapsed">
+                    <Button x:Name="DesktopsDropdownBtn"
+                            Style="{StaticResource HeaderButtonStyle}"
+                            Content="🗔 Desktops ▾"
+                            Padding="8,5,10,5"
+                            VerticalAlignment="Center"
+                            Click="DesktopsDropdownButton_Click"/>
+                    
+                    <Popup x:Name="DesktopsDropdownPopup" 
+                           PlacementTarget="{Binding ElementName=DesktopsDropdownBtn}" 
+                           Placement="Bottom" 
+                           AllowsTransparency="True" 
+                           StaysOpen="False" 
+                           PopupAnimation="Fade"
+                           HorizontalOffset="0"
+                           VerticalOffset="4">
+                        <Border Background="#D90C0C0E" 
+                                BorderBrush="#1AFFFFFF" 
+                                BorderThickness="1" 
+                                CornerRadius="8" 
+                                Width="180" 
+                                Padding="4">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="8" ShadowDepth="1" Opacity="0.25" Color="#000000" />
+                            </Border.Effect>
+                            <StackPanel>
+                                <ItemsControl x:Name="DropdownDesktopsList" ItemsSource="{Binding Desktops}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Button Content="{Binding Name}" 
+                                                    Click="DesktopButton_Click"
+                                                    MouseRightButtonUp="DesktopButton_RightClick"
+                                                    CommandParameter="{Binding}">
+                                                <Button.Style>
+                                                    <Style TargetType="Button" BasedOn="{StaticResource DropdownItemStyle}">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                                                <Setter Property="Background" Value="#26FFFFFF"/>
+                                                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                                                <Setter Property="Foreground" Value="#FFFFFFFF"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Button.Style>
+                                            </Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <Separator Background="#1AFFFFFF" Height="1" Margin="4,2,4,2"/>
+                                <Button Content="+ Add Desktop" Click="AddDesktopButton_Click" Style="{StaticResource DropdownItemStyle}"/>
+                            </StackPanel>
+                        </Border>
+                    </Popup>
                 </StackPanel>
             </Grid>
         </Border>

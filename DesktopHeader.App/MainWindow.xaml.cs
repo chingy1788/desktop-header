@@ -779,6 +779,10 @@ namespace DesktopHeader.App
 
         private void DesktopButton_Click(object sender, RoutedEventArgs e)
         {
+            if (DesktopsDropdownPopup != null && DesktopsDropdownPopup.IsOpen)
+            {
+                DesktopsDropdownPopup.IsOpen = false;
+            }
             if (sender is Button button && button.CommandParameter is DesktopItem clickedItem)
             {
                 try
@@ -1080,6 +1084,10 @@ namespace DesktopHeader.App
 
         private void AddDesktopButton_Click(object sender, RoutedEventArgs e)
         {
+            if (DesktopsDropdownPopup != null && DesktopsDropdownPopup.IsOpen)
+            {
+                DesktopsDropdownPopup.IsOpen = false;
+            }
             try
             {
                 Logger.LogInfo("Creating new virtual desktop...");
@@ -1090,6 +1098,14 @@ namespace DesktopHeader.App
             {
                 Logger.LogError("Failed to create virtual desktop.", ex);
                 MessageBox.Show($"Failed to create virtual desktop: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void DesktopsDropdownButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (DesktopsDropdownPopup != null)
+            {
+                DesktopsDropdownPopup.IsOpen = !DesktopsDropdownPopup.IsOpen;
             }
         }
 
@@ -1248,76 +1264,138 @@ namespace DesktopHeader.App
                     windowWidth = this.Width;
                 }
 
-                // If MainContainer isn't laid out yet, it defaults to 0. In that case, we can estimate.
-                double desktopsWidth = MainContainer.ActualWidth;
-                if (desktopsWidth <= 0 && Desktops.Count > 0)
+                // 1. Calculate estimated width of horizontal desktops
+                double estimatedHorizontalDesktopsWidth = 0;
+                foreach (var d in Desktops)
                 {
-                    // Estimate size: each button is around 100px on average, plus padding/margins
-                    desktopsWidth = Desktops.Count * 90 + 30;
+                    double textWidth = (d.Name?.Length ?? 0) * 7.5;
+                    estimatedHorizontalDesktopsWidth += textWidth + 30; // Button padding & margins
                 }
+                estimatedHorizontalDesktopsWidth += 35; // Plus button and margins
+
+                // DevEnv width
+                double devEnvWidth = DevEnvContainer.ActualWidth > 0 ? DevEnvContainer.ActualWidth : 75;
+
+                // 2. Decide Layout State
+                bool collapseDesktops = false;
+                bool collapseNotes = false;
+                bool hideNotesButton = false;
 
                 if (ShowNotesPreview)
                 {
-                    // 1. Expandable first-line preview mode
-                    double requiredWidth = desktopsWidth + 320 + 40; // 320 DIP panel width + 40 DIP buffer
-
-                    if (windowWidth > 0 && requiredWidth > windowWidth)
+                    // Required width for horizontal desktops + full notes panel
+                    double widthForFullNotesAndDesktops = estimatedHorizontalDesktopsWidth + 320 + devEnvWidth + 60;
+                    
+                    if (windowWidth >= widthForFullNotesAndDesktops)
                     {
-                        // Space is tight -> Hide standard panel, show button
-                        if (NotesContainer.Visibility != Visibility.Collapsed)
-                        {
-                            Logger.LogInfo($"Space is tight ({requiredWidth}px required vs {windowWidth}px available). Swapping Notes panel for button.");
-                            NotesContainer.Visibility = Visibility.Collapsed;
-                            NotesButton.Visibility = Visibility.Visible;
-                            
-                            // Close standard text editor and save note
-                            CollapseNotes();
-                        }
+                        collapseDesktops = false;
+                        collapseNotes = false;
                     }
                     else
                     {
-                        // Space is sufficient -> Show standard panel, hide button
-                        if (NotesContainer.Visibility != Visibility.Visible)
+                        // Try collapsing notes to button first
+                        double widthForNotesButtonAndDesktops = estimatedHorizontalDesktopsWidth + 46 + devEnvWidth + 60;
+                        if (windowWidth >= widthForNotesButtonAndDesktops)
                         {
-                            Logger.LogInfo($"Ample space detected ({requiredWidth}px required vs {windowWidth}px available). Restoring Notes panel.");
-                            NotesContainer.Visibility = Visibility.Visible;
-                            NotesButton.Visibility = Visibility.Collapsed;
+                            collapseDesktops = false;
+                            collapseNotes = true;
+                        }
+                        else
+                        {
+                            // Collapsing notes is not enough -> Collapse desktops to dropdown as well
+                            collapseDesktops = true;
+                            collapseNotes = true;
                             
-                            // Close popup if it was open
-                            if (NotesPopup.IsOpen)
+                            // Check if even collapsed desktops + notes button is too tight
+                            double widthForCollapsedDesktopsAndNotesButton = 95 + 46 + devEnvWidth + 60;
+                            if (windowWidth < widthForCollapsedDesktopsAndNotesButton)
                             {
-                                NotesPopup.IsOpen = false;
+                                hideNotesButton = true;
                             }
                         }
                     }
                 }
                 else
                 {
-                    // 2. Button-only mode: standard panel is ALWAYS Collapsed
+                    // Button-only mode: standard notes panel is always collapsed
+                    collapseNotes = true;
+                    
+                    double widthForNotesButtonAndDesktops = estimatedHorizontalDesktopsWidth + 46 + devEnvWidth + 60;
+                    if (windowWidth >= widthForNotesButtonAndDesktops)
+                    {
+                        collapseDesktops = false;
+                    }
+                    else
+                    {
+                        collapseDesktops = true;
+                        
+                        double widthForCollapsedDesktopsAndNotesButton = 95 + 46 + devEnvWidth + 60;
+                        if (windowWidth < widthForCollapsedDesktopsAndNotesButton)
+                        {
+                            hideNotesButton = true;
+                        }
+                    }
+                }
+
+                // 3. Apply Desktops Layout
+                if (collapseDesktops)
+                {
+                    if (HorizontalDesktopsPanel.Visibility != Visibility.Collapsed)
+                    {
+                        Logger.LogInfo("Collapsing desktop buttons list to dropdown menu.");
+                        HorizontalDesktopsPanel.Visibility = Visibility.Collapsed;
+                        CollapsedDesktopsPanel.Visibility = Visibility.Visible;
+                    }
+                }
+                else
+                {
+                    if (HorizontalDesktopsPanel.Visibility != Visibility.Visible)
+                    {
+                        Logger.LogInfo("Restoring horizontal desktop buttons list.");
+                        HorizontalDesktopsPanel.Visibility = Visibility.Visible;
+                        CollapsedDesktopsPanel.Visibility = Visibility.Collapsed;
+                        if (DesktopsDropdownPopup != null)
+                        {
+                            DesktopsDropdownPopup.IsOpen = false;
+                        }
+                    }
+                }
+
+                // 4. Apply Notes Layout
+                if (ShowNotesPreview && !collapseNotes)
+                {
+                    if (NotesContainer.Visibility != Visibility.Visible)
+                    {
+                        Logger.LogInfo("Restoring standard Notes panel.");
+                        NotesContainer.Visibility = Visibility.Visible;
+                        NotesButton.Visibility = Visibility.Collapsed;
+                        NotesPopup.IsOpen = false;
+                    }
+                }
+                else
+                {
                     if (NotesContainer.Visibility != Visibility.Collapsed)
                     {
+                        Logger.LogInfo("Collapsing standard Notes panel.");
                         NotesContainer.Visibility = Visibility.Collapsed;
                         CollapseNotes();
                     }
 
-                    // Button is visible unless space is extremely tight (desktops stretch full width)
-                    double requiredWidth = desktopsWidth + 46 + 20;
-
-                    if (windowWidth > 0 && requiredWidth > windowWidth)
+                    if (collapseNotes && !hideNotesButton)
                     {
-                        if (NotesButton.Visibility != Visibility.Collapsed)
+                        if (NotesButton.Visibility != Visibility.Visible)
                         {
-                            Logger.LogInfo($"Space is extremely restricted ({requiredWidth}px required vs {windowWidth}px available). Hiding Notes button.");
-                            NotesButton.Visibility = Visibility.Collapsed;
-                            NotesPopup.IsOpen = false;
+                            Logger.LogInfo("Showing Notes button.");
+                            NotesButton.Visibility = Visibility.Visible;
                         }
                     }
                     else
                     {
-                        if (NotesButton.Visibility != Visibility.Visible)
+                        if (NotesButton.Visibility != Visibility.Collapsed)
                         {
-                            Logger.LogInfo("Restoring Notes button in button-only mode.");
-                            NotesButton.Visibility = Visibility.Visible;
+                            Logger.LogInfo("Hiding Notes button due to extreme space restriction.");
+                            NotesButton.Visibility = Visibility.Collapsed;
+                            NotesPopup.IsOpen = false;
                         }
                     }
                 }
